@@ -1,0 +1,31 @@
+{
+  "version": 2,
+  "dgSpecHash": "HmctuCaQzaI=",
+  "success": true,
+  "projectFilePath": "D:\\DauGia\\realtime-auction-platform-be\\RealtimeAuction.Api\\RealtimeAuction.Api.csproj",
+  "expectedPackageFiles": [
+    "C:\\Users\\KAYT\\.nuget\\packages\\dnsclient\\1.6.1\\dnsclient.1.6.1.nupkg.sha512",
+    "C:\\Users\\KAYT\\.nuget\\packages\\microsoft.aspnetcore.openapi\\10.0.1\\microsoft.aspnetcore.openapi.10.0.1.nupkg.sha512",
+    "C:\\Users\\KAYT\\.nuget\\packages\\microsoft.aspnetcore.signalr\\1.2.9\\microsoft.aspnetcore.signalr.1.2.9.nupkg.sha512",
+    "C:\\Users\\KAYT\\.nuget\\packages\\microsoft.openapi\\2.0.0\\microsoft.openapi.2.0.0.nupkg.sha512",
+    "C:\\Users\\KAYT\\.nuget\\packages\\mongodb.bson\\3.5.2\\mongodb.bson.3.5.2.nupkg.sha512",
+    "C:\\Users\\KAYT\\.nuget\\packages\\mongodb.driver\\3.5.2\\mongodb.driver.3.5.2.nupkg.sha512",
+    "C:\\Users\\KAYT\\.nuget\\packages\\sharpcompress\\0.30.1\\sharpcompress.0.30.1.nupkg.sha512",
+    "C:\\Users\\KAYT\\.nuget\\packages\\snappier\\1.0.0\\snappier.1.0.0.nupkg.sha512",
+    "C:\\Users\\KAYT\\.nuget\\packages\\zstdsharp.port\\0.7.3\\zstdsharp.port.0.7.3.nupkg.sha512"
+  ],
+  "logs": [
+    {
+      "code": "NU1510",
+      "level": "Warning",
+      "message": "PackageReference Microsoft.AspNetCore.SignalR will not be pruned. Consider removing this package from your dependencies, as it is likely unnecessary.",
+      "projectPath": "D:\\DauGia\\realtime-auction-platform-be\\RealtimeAuction.Api\\RealtimeAuction.Api.csproj",
+      "warningLevel": 1,
+      "filePath": "D:\\DauGia\\realtime-auction-platform-be\\RealtimeAuction.Api\\RealtimeAuction.Api.csproj",
+      "libraryId": "Microsoft.AspNetCore.SignalR",
+      "targetGraphs": [
+        "net10.0"
+      ]
+    }
+  ]
+}
