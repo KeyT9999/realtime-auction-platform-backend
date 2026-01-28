@@ -4,6 +4,9 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using RealtimeAuction.Api.Repositories;
 using RealtimeAuction.Api.Services;
+using RealtimeAuction.Api.Hubs;
+using RealtimeAuction.Api.Jobs;
+using Quartz;
 using RealtimeAuction.Api.Settings;
 using MongoDB.Driver;
 using Microsoft.AspNetCore.Authentication.Google;
@@ -68,10 +71,16 @@ builder.Services.Configure<EmailSettings>(options =>
 });
 
 // Register MongoDB Database
-builder.Services.AddSingleton<IMongoDatabase>(serviceProvider =>
+// Register MongoDB Client & Database
+builder.Services.AddSingleton<IMongoClient>(serviceProvider =>
 {
     var settings = serviceProvider.GetRequiredService<MongoDbSettings>();
-    var client = new MongoClient(settings.ConnectionString);
+    return new MongoClient(settings.ConnectionString);
+});
+builder.Services.AddSingleton<IMongoDatabase>(serviceProvider =>
+{
+    var client = serviceProvider.GetRequiredService<IMongoClient>();
+    var settings = serviceProvider.GetRequiredService<MongoDbSettings>();
     return client.GetDatabase(settings.DatabaseName);
 });
 
@@ -80,9 +89,15 @@ builder.Services.AddScoped<IUserRepository, UserRepository>();
 
 // Register Services
 builder.Services.AddScoped<IAuthService, AuthService>();
+builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IAdminService, AdminService>();
+builder.Services.AddScoped<IAuctionService, AuctionService>();
 builder.Services.AddScoped<IEmailService, EmailService>();
 builder.Services.AddScoped<ITokenService, TokenService>();
+builder.Services.AddScoped<ICategoryRepository, CategoryRepository>();
+builder.Services.AddScoped<IProductRepository, ProductRepository>();
+builder.Services.AddScoped<ICategoryService, CategoryService>();
+builder.Services.AddScoped<IProductService, ProductService>();
 
 // Configure JWT Authentication
 builder.Services.AddAuthentication(options =>
@@ -114,7 +129,25 @@ builder.Services.AddAuthorization(options =>
 });
 
 // Add Controllers
+// Add Controllers
 builder.Services.AddControllers();
+
+// Add SignalR
+builder.Services.AddSignalR();
+
+// Add Quartz
+builder.Services.AddQuartz(q =>
+{
+    var jobKey = new JobKey("AuctionStatusJob");
+    q.AddJob<AuctionStatusJob>(opts => opts.WithIdentity(jobKey));
+    q.AddTrigger(opts => opts
+        .ForJob(jobKey)
+        .WithIdentity("AuctionStatusJob-trigger")
+        .WithSimpleSchedule(x => x
+            .WithIntervalInSeconds(1)
+            .RepeatForever()));
+});
+builder.Services.AddQuartzHostedService(q => q.WaitForJobsToComplete = true);
 
 // Add CORS
 builder.Services.AddCors(options =>
@@ -155,6 +188,8 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 // Map Controllers
+// Map Controllers
 app.MapControllers();
+app.MapHub<AuctionHub>("/auctionHub");
 
 app.Run();
