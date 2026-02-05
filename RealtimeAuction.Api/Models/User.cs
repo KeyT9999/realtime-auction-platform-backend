@@ -31,6 +31,12 @@ namespace RealtimeAuction.Api.Models
 
         public string? LockedReason { get; set; }
 
+        [BsonRepresentation(BsonType.Decimal128)]
+        public decimal AvailableBalance { get; set; } = 0;
+
+        [BsonRepresentation(BsonType.Decimal128)]
+        public decimal EscrowBalance { get; set; } = 0;
+
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
         public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
