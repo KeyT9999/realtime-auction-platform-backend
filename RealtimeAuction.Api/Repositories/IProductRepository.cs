@@ -1,13 +1,12 @@
-using RealtimeAuction.Api.Dtos;
 using RealtimeAuction.Api.Models;
 
-namespace RealtimeAuction.Api.Repositories
+namespace RealtimeAuction.Api.Repositories;
+
+public interface IProductRepository
 {
-    public interface IProductRepository
-    {
-        Task<Product?> GetByIdAsync(string id);
-        Task<Product> CreateAsync(Product product);
-        Task<Product> UpdateAsync(Product product);
-        Task<List<Product>> SearchAsync(ProductFilterDto filter);
-    }
+    Task<Product?> GetByIdAsync(string id);
+    Task<Product> CreateAsync(Product product);
+    Task<Product> UpdateAsync(Product product);
+    Task<bool> DeleteAsync(string id);
+    Task<List<Product>> GetAllAsync();
 }

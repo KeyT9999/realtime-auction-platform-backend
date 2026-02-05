@@ -1,51 +1,54 @@
 using MongoDB.Bson;
 using MongoDB.Bson.Serialization.Attributes;
+using RealtimeAuction.Api.Models.Enums;
 
-namespace RealtimeAuction.Api.Models
+namespace RealtimeAuction.Api.Models;
+
+public class Auction
 {
-    public class Auction
-    {
-        [BsonId]
-        [BsonRepresentation(BsonType.ObjectId)]
-        public string? Id { get; set; }
+    [BsonId]
+    [BsonRepresentation(BsonType.ObjectId)]
+    public string? Id { get; set; }
 
-        public string Title { get; set; } = string.Empty;
-        public string Description { get; set; } = string.Empty;
+    public string Title { get; set; } = null!;
 
-        [BsonRepresentation(BsonType.Decimal128)]
-        public decimal StartPrice { get; set; }
+    public string? Description { get; set; }
 
-        [BsonRepresentation(BsonType.Decimal128)]
-        public decimal CurrentPrice { get; set; }
+    [BsonRepresentation(BsonType.Decimal128)]
+    public decimal StartingPrice { get; set; }
 
-        [BsonRepresentation(BsonType.Decimal128)]
-        public decimal StepPrice { get; set; }
+    [BsonRepresentation(BsonType.Decimal128)]
+    public decimal CurrentPrice { get; set; }
 
-        public DateTime StartTime { get; set; }
-        public DateTime EndTime { get; set; }
+    [BsonRepresentation(BsonType.Decimal128)]
+    public decimal? ReservePrice { get; set; } // Optional - does not enforce minimum sale price
 
-        [BsonRepresentation(BsonType.String)]
-        public AuctionStatus Status { get; set; } = AuctionStatus.Draft;
+    public DateTime StartTime { get; set; }
 
-        [BsonRepresentation(BsonType.ObjectId)]
-        public string SellerId { get; set; } = string.Empty;
+    public DateTime EndTime { get; set; }
 
-        [BsonRepresentation(BsonType.ObjectId)]
-        public string? WinnerId { get; set; }
+    public int Duration { get; set; } // Stored in minutes, can be updated (e.g., when auto-extend occurs)
 
-        public List<string> ImageUrls { get; set; } = new();
+    [BsonRepresentation(BsonType.Int32)]
+    public AuctionStatus Status { get; set; } = AuctionStatus.Draft;
 
-        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
-    }
+    [BsonRepresentation(BsonType.ObjectId)]
+    public string SellerId { get; set; } = null!; // Reference to User
 
-    public enum AuctionStatus
-    {
-        Draft,
-        Scheduled,
-        Active,
-        Ended,
-        Completed,
-        Disputed,
-        Expired
-    }
+    [BsonRepresentation(BsonType.ObjectId)]
+    public string CategoryId { get; set; } = null!; // Reference to Category
+
+    [BsonRepresentation(BsonType.ObjectId)]
+    public string ProductId { get; set; } = null!; // Reference to Product (one-to-one relationship)
+
+    public List<string> Images { get; set; } = new(); // URLs to cloud storage
+
+    [BsonRepresentation(BsonType.Decimal128)]
+    public decimal BidIncrement { get; set; } // Minimum amount to increase bid
+
+    public int? AutoExtendDuration { get; set; } // Duration in minutes to extend auction (stored but logic not implemented)
+
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+
+    public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 }

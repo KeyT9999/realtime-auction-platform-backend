@@ -1,13 +1,14 @@
 using RealtimeAuction.Api.Models;
 
-namespace RealtimeAuction.Api.Repositories
+namespace RealtimeAuction.Api.Repositories;
+
+public interface ICategoryRepository
 {
-    public interface ICategoryRepository
-    {
-        Task<List<Category>> GetAllAsync();
-        Task<Category?> GetByIdAsync(string id);
-        Task<Category> CreateAsync(Category category);
-        Task<Category> UpdateAsync(Category category);
-        Task DeleteAsync(string id);
-    }
+    Task<Category?> GetByIdAsync(string id);
+    Task<Category> CreateAsync(Category category);
+    Task<Category> UpdateAsync(Category category);
+    Task<bool> DeleteAsync(string id);
+    Task<List<Category>> GetByParentIdAsync(string? parentCategoryId);
+    Task<List<Category>> GetRootCategoriesAsync();
+    Task<List<Category>> GetAllAsync();
 }
