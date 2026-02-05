@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using RealtimeAuction.Api.Models.Enums;
 
 namespace RealtimeAuction.Api.Dtos.Auth
 {
@@ -14,5 +15,8 @@ namespace RealtimeAuction.Api.Dtos.Auth
 
         [Required]
         public string FullName { get; set; } = null!;
+
+        // Mặc định là Link để backward compatible
+        public VerificationMethod VerificationMethod { get; set; } = VerificationMethod.Link;
     }
 }

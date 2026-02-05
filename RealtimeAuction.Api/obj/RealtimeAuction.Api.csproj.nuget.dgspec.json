@@ -60,6 +60,10 @@
               "target": "Package",
               "version": "[1.67.0, )"
             },
+            "MailKit": {
+              "target": "Package",
+              "version": "[4.8.0, )"
+            },
             "Microsoft.AspNetCore.Authentication.Google": {
               "target": "Package",
               "version": "[10.0.2, )"

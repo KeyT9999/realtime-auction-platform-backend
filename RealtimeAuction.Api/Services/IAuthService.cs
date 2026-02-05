@@ -1,5 +1,6 @@
 using RealtimeAuction.Api.Dtos.Auth;
 using RealtimeAuction.Api.Models;
+using RealtimeAuction.Api.Models.Enums;
 
 namespace RealtimeAuction.Api.Services
 {
@@ -12,7 +13,9 @@ namespace RealtimeAuction.Api.Services
         Task ForgotPasswordAsync(ForgotPasswordRequest request);
         Task ResetPasswordAsync(ResetPasswordRequest request);
         Task VerifyEmailAsync(VerifyEmailRequest request);
-        Task ResendVerificationAsync(string email);
+        Task VerifyOtpAsync(VerifyOtpRequest request);
+        Task ResendVerificationAsync(string email, VerificationMethod? method = null);
         Task ChangePasswordAsync(string userId, ChangePasswordRequest request);
+        Task RevokeRefreshTokenAsync(string refreshToken);
     }
 }

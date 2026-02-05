@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using RealtimeAuction.Api.Dtos.Auth;
 using RealtimeAuction.Api.Services;
@@ -12,10 +13,12 @@ namespace RealtimeAuction.Api.Controllers
     public class AuthController : ControllerBase
     {
         private readonly IAuthService _authService;
+        private readonly IHostEnvironment _env;
 
-        public AuthController(IAuthService authService)
+        public AuthController(IAuthService authService, IHostEnvironment env)
         {
             _authService = authService;
+            _env = env;
         }
 
         [HttpPost("register")]
@@ -38,7 +41,19 @@ namespace RealtimeAuction.Api.Controllers
             try
             {
                 var response = await _authService.LoginAsync(request);
-                return Ok(response);
+
+                // Set refresh token vào HttpOnly cookie
+                SetRefreshTokenCookie(response.RefreshToken);
+
+                // Chỉ trả access token trong body
+                return Ok(new
+                {
+                    accessToken = response.AccessToken,
+                    id = response.Id,
+                    email = response.Email,
+                    fullName = response.FullName,
+                    role = response.Role
+                });
             }
             catch (AuthenticationException ex)
             {
@@ -56,7 +71,18 @@ namespace RealtimeAuction.Api.Controllers
             try
             {
                 var response = await _authService.GoogleLoginAsync(request);
-                return Ok(response);
+
+                // Set refresh token vào HttpOnly cookie
+                SetRefreshTokenCookie(response.RefreshToken);
+
+                return Ok(new
+                {
+                    accessToken = response.AccessToken,
+                    id = response.Id,
+                    email = response.Email,
+                    fullName = response.FullName,
+                    role = response.Role
+                });
             }
             catch (AuthenticationException ex)
             {
@@ -73,8 +99,31 @@ namespace RealtimeAuction.Api.Controllers
         {
             try
             {
-                var response = await _authService.RefreshTokenAsync(request);
-                return Ok(response);
+                // Ưu tiên lấy refresh token từ cookie
+                var cookieRefreshToken = Request.Cookies["refreshToken"];
+                var refreshToken = cookieRefreshToken ?? request.RefreshToken;
+
+                if (string.IsNullOrWhiteSpace(refreshToken))
+                {
+                    return Unauthorized(new { message = "Refresh token is missing" });
+                }
+
+                var response = await _authService.RefreshTokenAsync(new RefreshTokenRequest
+                {
+                    RefreshToken = refreshToken
+                });
+
+                // Rotate refresh token trong cookie
+                SetRefreshTokenCookie(response.RefreshToken);
+
+                return Ok(new
+                {
+                    accessToken = response.AccessToken,
+                    id = response.Id,
+                    email = response.Email,
+                    fullName = response.FullName,
+                    role = response.Role
+                });
             }
             catch (AuthenticationException ex)
             {
@@ -138,12 +187,30 @@ namespace RealtimeAuction.Api.Controllers
             }
         }
 
+        [HttpPost("verify-otp")]
+        public async Task<IActionResult> VerifyOtp([FromBody] VerifyOtpRequest request)
+        {
+            try
+            {
+                await _authService.VerifyOtpAsync(request);
+                return Ok(new { message = "Email verified successfully." });
+            }
+            catch (AuthenticationException ex)
+            {
+                return Unauthorized(new { message = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
         [HttpPost("resend-verification")]
         public async Task<IActionResult> ResendVerification([FromBody] ResendVerificationRequest request)
         {
             try
             {
-                await _authService.ResendVerificationAsync(request.Email);
+                await _authService.ResendVerificationAsync(request.Email, request.VerificationMethod);
                 return Ok(new { message = "Verification email sent successfully." });
             }
             catch (Exception ex)
@@ -175,6 +242,60 @@ namespace RealtimeAuction.Api.Controllers
             {
                 return BadRequest(new { message = ex.Message });
             }
+        }
+
+        [HttpPost("logout")]
+        public async Task<IActionResult> Logout()
+        {
+            try
+            {
+                var refreshToken = Request.Cookies["refreshToken"];
+                if (!string.IsNullOrWhiteSpace(refreshToken))
+                {
+                    await _authService.RevokeRefreshTokenAsync(refreshToken);
+                }
+
+                DeleteRefreshTokenCookie();
+
+                return Ok(new { message = "Logged out successfully." });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
+        private CookieOptions BuildCookieOptions(bool persistent = true)
+        {
+            // Dev: cross-port -> SameSite=None; Prod: Lax
+            var sameSite = _env.IsDevelopment() ? SameSiteMode.None : SameSiteMode.Lax;
+
+            return new CookieOptions
+            {
+                HttpOnly = true,
+                Secure = true, // yêu cầu HTTPS để dùng SameSite=None
+                SameSite = sameSite,
+                Expires = persistent ? DateTimeOffset.UtcNow.AddDays(7) : null,
+                Path = "/"
+            };
+        }
+
+        private void SetRefreshTokenCookie(string refreshToken)
+        {
+            if (string.IsNullOrWhiteSpace(refreshToken))
+            {
+                return;
+            }
+
+            var options = BuildCookieOptions();
+            Response.Cookies.Append("refreshToken", refreshToken, options);
+        }
+
+        private void DeleteRefreshTokenCookie()
+        {
+            var options = BuildCookieOptions();
+            options.Expires = DateTimeOffset.UtcNow.AddDays(-1);
+            Response.Cookies.Delete("refreshToken", options);
         }
     }
 }
