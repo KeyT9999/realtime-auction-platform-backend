@@ -16,4 +16,15 @@ public interface IAuctionRepository
     Task<List<Auction>> GetActiveAuctionsAsync();
     Task<Auction> UpdateCurrentPriceAsync(string auctionId, decimal newPrice);
     Task<bool> ValidateStatusTransitionAsync(AuctionStatus currentStatus, AuctionStatus newStatus);
+    Task<(List<Auction> items, int totalCount)> SearchAuctionsAsync(
+        string? keyword,
+        AuctionStatus? status,
+        string? categoryId,
+        decimal? minPrice,
+        decimal? maxPrice,
+        string? timeFilter,
+        string sortBy,
+        string sortOrder,
+        int page,
+        int pageSize);
 }

@@ -38,13 +38,46 @@ public class AuctionController : ControllerBase
     }
 
     [HttpGet]
+    [AllowAnonymous] // Allow viewing auction list without login
     public async Task<IActionResult> GetAuctions(
+        [FromQuery] string? keyword = null,
         [FromQuery] AuctionStatus? status = null,
         [FromQuery] string? categoryId = null,
-        [FromQuery] string? sellerId = null)
+        [FromQuery] string? sellerId = null,
+        [FromQuery] decimal? minPrice = null,
+        [FromQuery] decimal? maxPrice = null,
+        [FromQuery] string? timeFilter = null,
+        [FromQuery] string sortBy = "startTime",
+        [FromQuery] string sortOrder = "desc",
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 12)
     {
         try
         {
+            // Use advanced search if any filter is provided
+            if (!string.IsNullOrEmpty(keyword) || 
+                minPrice.HasValue || 
+                maxPrice.HasValue || 
+                !string.IsNullOrEmpty(timeFilter))
+            {
+                var (items, searchTotalCount) = await _auctionRepository.SearchAuctionsAsync(
+                    keyword, status, categoryId, minPrice, maxPrice, 
+                    timeFilter, sortBy, sortOrder, page, pageSize);
+
+                var response = await MapToResponseDtos(items);
+                var searchTotalPages = (int)Math.Ceiling((double)searchTotalCount / pageSize);
+
+                return Ok(new
+                {
+                    items = response,
+                    totalCount = searchTotalCount,
+                    page,
+                    pageSize,
+                    totalPages = searchTotalPages
+                });
+            }
+
+            // Fallback to simple queries for backward compatibility
             List<Auction> auctions;
             if (status.HasValue)
             {
@@ -63,8 +96,24 @@ public class AuctionController : ControllerBase
                 auctions = await _auctionRepository.GetAllAsync();
             }
 
-            var response = await MapToResponseDtos(auctions);
-            return Ok(response);
+            // Apply pagination to simple queries
+            var simpleTotalCount = auctions.Count;
+            var paginatedAuctions = auctions
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .ToList();
+
+            var simpleResponse = await MapToResponseDtos(paginatedAuctions);
+            var simpleTotalPages = (int)Math.Ceiling((double)simpleTotalCount / pageSize);
+
+            return Ok(new
+            {
+                items = simpleResponse,
+                totalCount = simpleTotalCount,
+                page,
+                pageSize,
+                totalPages = simpleTotalPages
+            });
         }
         catch (Exception ex)
         {
