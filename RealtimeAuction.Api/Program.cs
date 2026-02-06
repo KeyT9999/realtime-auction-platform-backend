@@ -316,6 +316,13 @@ builder.Services.AddCors(options =>
 
 var app = builder.Build();
 
+// Seed categories on startup
+using (var scope = app.Services.CreateScope())
+{
+    var database = scope.ServiceProvider.GetRequiredService<IMongoDatabase>();
+    await SeedCategories.SeedAsync(database);
+}
+
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {

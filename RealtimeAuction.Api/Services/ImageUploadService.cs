@@ -11,10 +11,12 @@ public class ImageUploadService : IImageUploadService
     private readonly ILogger<ImageUploadService> _logger;
     private const long MaxFileSize = 5 * 1024 * 1024; // 5MB
     private readonly string[] AllowedExtensions = { ".jpg", ".jpeg", ".png", ".webp" };
+    private readonly string _cloudName;
 
     public ImageUploadService(IOptions<CloudinarySettings> settings, ILogger<ImageUploadService> logger)
     {
         _logger = logger;
+        _cloudName = settings.Value.CloudName;
         var account = new Account(
             settings.Value.CloudName,
             settings.Value.ApiKey,
@@ -62,7 +64,7 @@ public class ImageUploadService : IImageUploadService
                 return uploadResult.SecureUrl.ToString();
             }
 
-            throw new Exception($"Upload failed with status: {uploadResult.StatusCode}");
+            throw new Exception($"Upload failed with status: {uploadResult.StatusCode}, Error: {uploadResult.Error?.Message}");
         }
         catch (Exception ex)
         {
