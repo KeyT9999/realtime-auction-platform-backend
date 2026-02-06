@@ -302,6 +302,9 @@ builder.Services.AddAuthorization(options =>
 // Add Controllers
 builder.Services.AddControllers();
 
+// Add SignalR
+builder.Services.AddSignalR();
+
 // Add CORS
 builder.Services.AddCors(options =>
 {
@@ -349,6 +352,9 @@ app.UseAuthorization();
 
 // Map Controllers
 app.MapControllers();
+
+// Map SignalR Hub
+app.MapHub<RealtimeAuction.Api.Hubs.AuctionHub>("/auctionHub");
 
 // #region agent log
 try 

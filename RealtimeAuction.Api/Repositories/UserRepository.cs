@@ -43,4 +43,9 @@ public class UserRepository : IUserRepository
         var count = await _users.CountDocumentsAsync(u => u.Email == email);
         return count > 0;
     }
+
+    public async Task<List<User>> GetAllAsync()
+    {
+        return await _users.Find(_ => true).ToListAsync();
+    }
 }

@@ -364,4 +364,74 @@ public class AdminService : IAdminService
             UnverifiedUsers = (int)unverifiedUsers
         };
     }
+
+    public async Task<int> BulkLockUsersAsync(List<string> userIds, string? reason, string currentAdminId)
+    {
+        // Remove current admin from the list to prevent self-locking
+        userIds = userIds.Where(id => id != currentAdminId).ToList();
+        
+        var filter = Builders<User>.Filter.In(u => u.Id, userIds) & Builders<User>.Filter.Eq(u => u.IsLocked, false);
+        
+        var update = Builders<User>.Update
+            .Set(u => u.IsLocked, true)
+            .Set(u => u.LockedAt, DateTime.UtcNow)
+            .Set(u => u.LockedReason, reason)
+            .Set(u => u.UpdatedAt, DateTime.UtcNow);
+            
+        var result = await _users.UpdateManyAsync(filter, update);
+        
+        _logger.LogInformation("Admin bulk locked {Count} users. Reason: {Reason}", result.ModifiedCount, reason);
+        
+        return (int)result.ModifiedCount;
+    }
+
+    public async Task<int> BulkUnlockUsersAsync(List<string> userIds)
+    {
+        var filter = Builders<User>.Filter.In(u => u.Id, userIds) & Builders<User>.Filter.Eq(u => u.IsLocked, true);
+        
+        var update = Builders<User>.Update
+            .Set(u => u.IsLocked, false)
+            .Set(u => u.LockedAt, null)
+            .Set(u => u.LockedReason, null)
+            .Set(u => u.UpdatedAt, DateTime.UtcNow);
+            
+        var result = await _users.UpdateManyAsync(filter, update);
+        
+        _logger.LogInformation("Admin bulk unlocked {Count} users", result.ModifiedCount);
+        
+        return (int)result.ModifiedCount;
+    }
+
+    public async Task<int> BulkDeleteUsersAsync(List<string> userIds, string currentAdminId)
+    {
+        // Remove current admin from the list to prevent self-deletion
+        userIds = userIds.Where(id => id != currentAdminId).ToList();
+        
+        var filter = Builders<User>.Filter.In(u => u.Id, userIds);
+        var result = await _users.DeleteManyAsync(filter);
+        
+        _logger.LogInformation("Admin bulk deleted {Count} users", result.DeletedCount);
+        
+        return (int)result.DeletedCount;
+    }
+
+    public async Task<int> BulkChangeRoleAsync(List<string> userIds, string role)
+    {
+        if (role != "User" && role != "Admin")
+        {
+            throw new Exception("Invalid role. Role must be 'User' or 'Admin'");
+        }
+        
+        var filter = Builders<User>.Filter.In(u => u.Id, userIds);
+        
+        var update = Builders<User>.Update
+            .Set(u => u.Role, role)
+            .Set(u => u.UpdatedAt, DateTime.UtcNow);
+            
+        var result = await _users.UpdateManyAsync(filter, update);
+        
+        _logger.LogInformation("Admin bulk changed role to {Role} for {Count} users", role, result.ModifiedCount);
+        
+        return (int)result.ModifiedCount;
+    }
 }

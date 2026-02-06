@@ -48,6 +48,16 @@ public class Auction
 
     public int? AutoExtendDuration { get; set; } // Duration in minutes to extend auction (stored but logic not implemented)
 
+    public int BidCount { get; set; } = 0; // Number of bids placed on this auction
+
+    [BsonRepresentation(BsonType.Decimal128)]
+    public decimal? BuyoutPrice { get; set; } // Optional - instant purchase price (must be >= StartingPrice * 1.5)
+
+    [BsonRepresentation(BsonType.ObjectId)]
+    public string? WinnerId { get; set; } // User who won the auction (via buyout, accept bid, or natural end)
+
+    public string? EndReason { get; set; } // Reason auction ended: "natural", "buyout", "accepted", "cancelled"
+
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
