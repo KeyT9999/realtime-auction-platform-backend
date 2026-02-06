@@ -17,6 +17,7 @@ namespace RealtimeAuction.Api.Services
         private readonly IMongoCollection<PasswordResetToken> _passwordResetTokens;
         private readonly IMongoCollection<EmailVerificationToken> _emailVerificationTokens;
         private readonly IMongoCollection<OtpToken> _otpTokens;
+        private readonly IMongoCollection<PasswordResetOtp> _passwordResetOtps;
         private readonly ITokenService _tokenService;
         private readonly IEmailService _emailService;
         private readonly IConfiguration _configuration;
@@ -33,6 +34,7 @@ namespace RealtimeAuction.Api.Services
             _passwordResetTokens = database.GetCollection<PasswordResetToken>("PasswordResetTokens");
             _emailVerificationTokens = database.GetCollection<EmailVerificationToken>("EmailVerificationTokens");
             _otpTokens = database.GetCollection<OtpToken>("OtpTokens");
+            _passwordResetOtps = database.GetCollection<PasswordResetOtp>("PasswordResetOtps");
             _tokenService = tokenService;
             _emailService = emailService;
             _configuration = configuration;
@@ -76,6 +78,9 @@ namespace RealtimeAuction.Api.Services
             // #endregion agent log
 
             // Send verification email dựa trên phương thức được chọn
+            bool emailSent = true;
+            string? emailErrorMessage = null;
+            
             try
             {
                 // #region agent log
@@ -101,7 +106,9 @@ namespace RealtimeAuction.Api.Services
                 try { System.IO.File.AppendAllText(@"d:\DauGia\.cursor\debug.log", System.Text.Json.JsonSerializer.Serialize(new { sessionId = "debug-session", runId = "run1", hypothesisId = "B", location = "AuthService.cs:84", message = "Failed to send verification email", data = new { error = ex.Message, stackTrace = ex.StackTrace }, timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() }) + "\n"); } catch { }
                 // #endregion agent log
                 _logger.LogError(ex, "Failed to send verification email to {Email}", user.Email);
-                // Don't fail registration if email fails
+                // Don't fail registration if email fails, but notify user
+                emailSent = false;
+                emailErrorMessage = "Đăng ký thành công nhưng không thể gửi email xác thực. Vui lòng liên hệ admin hoặc thử gửi lại sau.";
             }
 
             // Không trả tokens nếu chưa verify email - user phải verify trước khi login
@@ -113,7 +120,9 @@ namespace RealtimeAuction.Api.Services
                 FullName = user.FullName,
                 Role = user.Role!,
                 AccessToken = string.Empty, // Không có token
-                RefreshToken = string.Empty // Không có token
+                RefreshToken = string.Empty, // Không có token
+                EmailSent = emailSent,
+                Message = emailErrorMessage
             };
 
             // #region agent log
@@ -240,36 +249,36 @@ namespace RealtimeAuction.Api.Services
                 return;
             }
 
-            // Generate secure token
-            var tokenBytes = RandomNumberGenerator.GetBytes(32);
-            var token = Convert.ToBase64String(tokenBytes).Replace("+", "-").Replace("/", "_").Replace("=", "");
+            // Tạo mã OTP 6 chữ số
+            var random = new Random();
+            var otpCode = random.Next(100000, 999999).ToString();
 
-            // Create reset token with 30-minute expiration
-            var resetToken = new PasswordResetToken
+            // Hash OTP bằng BCrypt
+            var otpCodeHash = BCrypt.Net.BCrypt.HashPassword(otpCode);
+
+            // Tạo OTP token với thời hạn 10 phút
+            var passwordResetOtp = new PasswordResetOtp
             {
-                Token = token,
-                UserId = user.Id!,
-                ExpiresAt = DateTime.UtcNow.AddMinutes(30),
+                OtpCodeHash = otpCodeHash,
+                Email = user.Email,
+                ExpiresAt = DateTime.UtcNow.AddMinutes(10),
                 IsUsed = false,
+                Attempts = 0,
                 CreatedAt = DateTime.UtcNow
             };
 
-            await _passwordResetTokens.InsertOneAsync(resetToken);
+            await _passwordResetOtps.InsertOneAsync(passwordResetOtp);
 
-            // Build reset URL
-            var frontendUrl = _configuration["FrontendUrl"] ?? "http://localhost:5173";
-            var resetUrl = $"{frontendUrl}/reset-password?token={token}";
-
-            // Send email
+            // Send email với OTP
             try
             {
-                await _emailService.SendPasswordResetEmailAsync(user.Email, user.FullName, token, resetUrl);
-                _logger.LogInformation("Password reset email sent to {Email}", user.Email);
+                await _emailService.SendPasswordResetOtpEmailAsync(user.Email, user.FullName, otpCode);
+                _logger.LogInformation("Password reset OTP sent to {Email}", user.Email);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Failed to send password reset email to {Email}", user.Email);
-                // Don't throw - token is already created, user can request again
+                _logger.LogError(ex, "Failed to send password reset OTP to {Email}", user.Email);
+                throw; // Throw để frontend biết email không gửi được
             }
         }
 
@@ -309,6 +318,95 @@ namespace RealtimeAuction.Api.Services
             await _passwordResetTokens.UpdateOneAsync(t => t.Id == resetToken.Id, update);
 
             _logger.LogInformation("Password reset successful for user {UserId}", user.Id);
+        }
+
+        public async Task ResetPasswordWithOtpAsync(ResetPasswordWithOtpRequest request)
+        {
+            // Tìm user theo email
+            var user = await _users.Find(u => u.Email == request.Email).FirstOrDefaultAsync();
+            if (user == null)
+            {
+                throw new AuthenticationException("Email không tồn tại trong hệ thống");
+            }
+
+            // Tìm OTP token chưa dùng, chưa hết hạn, sắp xếp theo CreatedAt DESC
+            var otpRecord = await _passwordResetOtps
+                .Find(t => t.Email == request.Email && !t.IsUsed && t.ExpiresAt > DateTime.UtcNow)
+                .SortByDescending(t => t.CreatedAt)
+                .FirstOrDefaultAsync();
+
+            if (otpRecord == null)
+            {
+                throw new AuthenticationException("Mã OTP không hợp lệ hoặc đã hết hạn");
+            }
+
+            // Kiểm tra số lần nhập sai (tối đa 5 lần)
+            if (otpRecord.Attempts >= 5)
+            {
+                throw new AuthenticationException("Mã OTP đã bị khóa do nhập sai quá nhiều lần. Vui lòng yêu cầu mã mới.");
+            }
+
+            // Verify OTP bằng BCrypt
+            if (!BCrypt.Net.BCrypt.Verify(request.OtpCode, otpRecord.OtpCodeHash))
+            {
+                // Tăng số lần nhập sai
+                var update = Builders<PasswordResetOtp>.Update.Inc(t => t.Attempts, 1);
+                await _passwordResetOtps.UpdateOneAsync(t => t.Id == otpRecord.Id, update);
+                
+                throw new AuthenticationException("Mã OTP không chính xác");
+            }
+
+            // Validate password strength
+            var passwordValidation = PasswordValidator.ValidatePasswordStrength(request.NewPassword);
+            if (!passwordValidation.IsValid)
+            {
+                throw new Exception(passwordValidation.ErrorMessage);
+            }
+
+            // Đổi mật khẩu
+            user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.NewPassword);
+            user.UpdatedAt = DateTime.UtcNow;
+            await _users.ReplaceOneAsync(u => u.Id == user.Id, user);
+
+            // Đánh dấu OTP đã dùng
+            var markUsed = Builders<PasswordResetOtp>.Update.Set(t => t.IsUsed, true);
+            await _passwordResetOtps.UpdateOneAsync(t => t.Id == otpRecord.Id, markUsed);
+
+            _logger.LogInformation("Password reset via OTP successful for user {UserId}", user.Id);
+        }
+
+        public async Task ResendPasswordResetOtpAsync(string email)
+        {
+            var user = await _users.Find(u => u.Email == email).FirstOrDefaultAsync();
+            if (user == null)
+            {
+                // Don't reveal if email exists
+                return;
+            }
+
+            // Tạo mã OTP 6 chữ số mới
+            var random = new Random();
+            var otpCode = random.Next(100000, 999999).ToString();
+
+            // Hash OTP bằng BCrypt
+            var otpCodeHash = BCrypt.Net.BCrypt.HashPassword(otpCode);
+
+            // Tạo OTP token mới với thời hạn 10 phút
+            var passwordResetOtp = new PasswordResetOtp
+            {
+                OtpCodeHash = otpCodeHash,
+                Email = user.Email,
+                ExpiresAt = DateTime.UtcNow.AddMinutes(10),
+                IsUsed = false,
+                Attempts = 0,
+                CreatedAt = DateTime.UtcNow
+            };
+
+            await _passwordResetOtps.InsertOneAsync(passwordResetOtp);
+
+            // Send email với OTP mới
+            await _emailService.SendPasswordResetOtpEmailAsync(user.Email, user.FullName, otpCode);
+            _logger.LogInformation("Password reset OTP resent to {Email}", user.Email);
         }
 
         public async Task VerifyEmailAsync(VerifyEmailRequest request)

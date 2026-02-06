@@ -214,6 +214,10 @@ var emailSettings = new EmailSettings
         ?? string.Empty
 };
 
+// #region agent log
+try { System.IO.File.AppendAllText(@"d:\DauGia\.cursor\debug.log", JsonSerializer.Serialize(new { sessionId = "debug-session", runId = "run1", hypothesisId = "A", location = "Program.cs:190", message = "Final EmailSettings values", data = new { useSmtp = emailSettings.UseSmtp, smtpHost = emailSettings.SmtpHost, smtpPort = emailSettings.SmtpPort, smtpUsernameLength = emailSettings.SmtpUsername?.Length ?? 0, smtpPasswordLength = emailSettings.SmtpPassword?.Length ?? 0, fromEmail = emailSettings.FromEmail, fromName = emailSettings.FromName, hasApiKey = !string.IsNullOrWhiteSpace(emailSettings.ApiKey) }, timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() }) + "\n"); } catch { }
+// #endregion agent log
+
 // Add services to the container.
 builder.Services.AddSingleton(mongoDbSettings);
 builder.Services.Configure<CloudinarySettings>(options =>

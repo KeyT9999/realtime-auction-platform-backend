@@ -8,5 +8,9 @@ namespace RealtimeAuction.Api.Dtos.Auth
         public string Role { get; set; } = null!;
         public string AccessToken { get; set; } = null!;
         public string RefreshToken { get; set; } = null!;
+        
+        // Thêm fields để thông báo trạng thái gửi email
+        public bool EmailSent { get; set; } = true;
+        public string? Message { get; set; }
     }
 }

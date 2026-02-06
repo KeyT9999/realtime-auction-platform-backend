@@ -169,6 +169,38 @@ namespace RealtimeAuction.Api.Controllers
             }
         }
 
+        [HttpPost("reset-password-otp")]
+        public async Task<IActionResult> ResetPasswordWithOtp([FromBody] ResetPasswordWithOtpRequest request)
+        {
+            try
+            {
+                await _authService.ResetPasswordWithOtpAsync(request);
+                return Ok(new { message = "Mật khẩu đã được đặt lại thành công." });
+            }
+            catch (AuthenticationException ex)
+            {
+                return Unauthorized(new { message = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
+        [HttpPost("resend-password-reset-otp")]
+        public async Task<IActionResult> ResendPasswordResetOtp([FromBody] ForgotPasswordRequest request)
+        {
+            try
+            {
+                await _authService.ResendPasswordResetOtpAsync(request.Email);
+                return Ok(new { message = "Mã OTP mới đã được gửi đến email của bạn." });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
         [HttpPost("verify-email")]
         public async Task<IActionResult> VerifyEmail([FromBody] VerifyEmailRequest request)
         {

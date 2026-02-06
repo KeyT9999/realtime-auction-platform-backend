@@ -12,6 +12,8 @@ namespace RealtimeAuction.Api.Services
         Task<AuthResponse> GoogleLoginAsync(GoogleLoginRequest request);
         Task ForgotPasswordAsync(ForgotPasswordRequest request);
         Task ResetPasswordAsync(ResetPasswordRequest request);
+        Task ResetPasswordWithOtpAsync(ResetPasswordWithOtpRequest request);
+        Task ResendPasswordResetOtpAsync(string email);
         Task VerifyEmailAsync(VerifyEmailRequest request);
         Task VerifyOtpAsync(VerifyOtpRequest request);
         Task ResendVerificationAsync(string email, VerificationMethod? method = null);

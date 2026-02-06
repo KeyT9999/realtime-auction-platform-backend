@@ -74,8 +74,8 @@ public class EmailService : IEmailService
             // #region agent log
             try { System.IO.File.AppendAllText(@"d:\DauGia\.cursor\debug.log", System.Text.Json.JsonSerializer.Serialize(new { sessionId = "debug-session", runId = "run1", hypothesisId = "B", location = "EmailService.cs:52", message = "SMTP settings not configured", data = new { }, timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() }) + "\n"); } catch { }
             // #endregion agent log
-            _logger.LogWarning("SMTP settings are not configured. Email will not be sent.");
-            return;
+            _logger.LogError("SMTP settings are not configured. Email cannot be sent.");
+            throw new InvalidOperationException("Email configuration is missing. Please configure SMTP settings (MAIL_HOST, MAIL_USERNAME, MAIL_PASSWORD) in the .env file.");
         }
 
         var message = new MimeMessage();
@@ -96,15 +96,40 @@ public class EmailService : IEmailService
         message.Body = bodyBuilder.ToMessageBody();
 
         // #region agent log
-        try { System.IO.File.AppendAllText(@"d:\DauGia\.cursor\debug.log", System.Text.Json.JsonSerializer.Serialize(new { sessionId = "debug-session", runId = "run1", hypothesisId = "B", location = "EmailService.cs:74", message = "About to connect to SMTP", data = new { smtpHost = _emailSettings.SmtpHost, smtpPort = _emailSettings.SmtpPort }, timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() }) + "\n"); } catch { }
+        try { System.IO.File.AppendAllText(@"d:\DauGia\.cursor\debug.log", System.Text.Json.JsonSerializer.Serialize(new { sessionId = "debug-session", runId = "run1", hypothesisId = "D", location = "EmailService.cs:74", message = "About to connect to SMTP", data = new { smtpHost = _emailSettings.SmtpHost, smtpPort = _emailSettings.SmtpPort, fromEmail = _emailSettings.FromEmail, fromName = _emailSettings.FromName }, timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() }) + "\n"); } catch { }
         // #endregion agent log
 
         using (var client = new SmtpClient())
         {
-            await client.ConnectAsync(_emailSettings.SmtpHost, _emailSettings.SmtpPort, SecureSocketOptions.StartTls);
-            await client.AuthenticateAsync(_emailSettings.SmtpUsername, _emailSettings.SmtpPassword);
-            await client.SendAsync(message);
-            await client.DisconnectAsync(true);
+            try
+            {
+                // #region agent log
+                try { System.IO.File.AppendAllText(@"d:\DauGia\.cursor\debug.log", System.Text.Json.JsonSerializer.Serialize(new { sessionId = "debug-session", runId = "run1", hypothesisId = "D", location = "EmailService.cs:80", message = "Connecting to SMTP server...", data = new { }, timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() }) + "\n"); } catch { }
+                // #endregion agent log
+                await client.ConnectAsync(_emailSettings.SmtpHost, _emailSettings.SmtpPort, SecureSocketOptions.StartTls);
+                
+                // #region agent log
+                try { System.IO.File.AppendAllText(@"d:\DauGia\.cursor\debug.log", System.Text.Json.JsonSerializer.Serialize(new { sessionId = "debug-session", runId = "run1", hypothesisId = "D", location = "EmailService.cs:84", message = "Connected! Now authenticating...", data = new { usernameLength = _emailSettings.SmtpUsername?.Length ?? 0, passwordLength = _emailSettings.SmtpPassword?.Length ?? 0 }, timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() }) + "\n"); } catch { }
+                // #endregion agent log
+                await client.AuthenticateAsync(_emailSettings.SmtpUsername, _emailSettings.SmtpPassword);
+                
+                // #region agent log
+                try { System.IO.File.AppendAllText(@"d:\DauGia\.cursor\debug.log", System.Text.Json.JsonSerializer.Serialize(new { sessionId = "debug-session", runId = "run1", hypothesisId = "D", location = "EmailService.cs:88", message = "Authenticated! Sending email...", data = new { }, timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() }) + "\n"); } catch { }
+                // #endregion agent log
+                await client.SendAsync(message);
+                
+                // #region agent log
+                try { System.IO.File.AppendAllText(@"d:\DauGia\.cursor\debug.log", System.Text.Json.JsonSerializer.Serialize(new { sessionId = "debug-session", runId = "run1", hypothesisId = "D", location = "EmailService.cs:92", message = "Email sent! Disconnecting...", data = new { }, timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() }) + "\n"); } catch { }
+                // #endregion agent log
+                await client.DisconnectAsync(true);
+            }
+            catch (Exception smtpEx)
+            {
+                // #region agent log
+                try { System.IO.File.AppendAllText(@"d:\DauGia\.cursor\debug.log", System.Text.Json.JsonSerializer.Serialize(new { sessionId = "debug-session", runId = "run1", hypothesisId = "D", location = "EmailService.cs:98", message = "SMTP operation failed", data = new { exceptionType = smtpEx.GetType().Name, error = smtpEx.Message, innerError = smtpEx.InnerException?.Message }, timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() }) + "\n"); } catch { }
+                // #endregion agent log
+                throw;
+            }
         }
 
         // #region agent log
@@ -118,8 +143,8 @@ public class EmailService : IEmailService
     {
         if (string.IsNullOrWhiteSpace(_emailSettings.ApiKey))
         {
-            _logger.LogWarning("SendGrid API key is not configured. Email will not be sent.");
-            return;
+            _logger.LogError("SendGrid API key is not configured. Email cannot be sent.");
+            throw new InvalidOperationException("Email configuration is missing. Please configure SENDGRID_API_KEY in the .env file.");
         }
 
         var client = new SendGridClient(_emailSettings.ApiKey);
@@ -138,6 +163,7 @@ public class EmailService : IEmailService
             var body = await response.Body.ReadAsStringAsync();
             _logger.LogError("Failed to send email to {Email}. Status: {Status}, Body: {Body}", 
                 toEmail, response.StatusCode, body);
+            throw new InvalidOperationException($"Failed to send email via SendGrid. Status: {response.StatusCode}");
         }
     }
 
@@ -174,6 +200,17 @@ public class EmailService : IEmailService
         htmlContent = htmlContent.Replace("{{OtpCode}}", otpCode);
         
         await SendEmailAsync(toEmail, toName, "Your Verification Code - Realtime Auction Platform", htmlContent);
+    }
+
+    public async Task SendPasswordResetOtpEmailAsync(string toEmail, string toName, string otpCode)
+    {
+        var templatePath = Path.Combine(Directory.GetCurrentDirectory(), "Templates", "PasswordResetOtpEmail.html");
+        var htmlContent = await File.ReadAllTextAsync(templatePath);
+        
+        htmlContent = htmlContent.Replace("{{UserName}}", toName);
+        htmlContent = htmlContent.Replace("{{OtpCode}}", otpCode);
+        
+        await SendEmailAsync(toEmail, toName, "Mã xác nhận đặt lại mật khẩu - Realtime Auction Platform", htmlContent);
     }
 
     public async Task SendWelcomeEmailAsync(string toEmail, string toName)
