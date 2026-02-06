@@ -1,7 +1,9 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.SignalR;
 using RealtimeAuction.Api.Dtos.Auction;
 using RealtimeAuction.Api.Helpers;
+using RealtimeAuction.Api.Hubs;
 using RealtimeAuction.Api.Models;
 using RealtimeAuction.Api.Models.Enums;
 using RealtimeAuction.Api.Repositories;
@@ -19,6 +21,7 @@ public class AuctionController : ControllerBase
     private readonly IProductRepository _productRepository;
     private readonly IUserRepository _userRepository;
     private readonly IBidRepository _bidRepository;
+    private readonly IHubContext<AuctionHub> _hubContext;
     private readonly ILogger<AuctionController> _logger;
 
     public AuctionController(
@@ -27,6 +30,7 @@ public class AuctionController : ControllerBase
         IProductRepository productRepository,
         IUserRepository userRepository,
         IBidRepository bidRepository,
+        IHubContext<AuctionHub> hubContext,
         ILogger<AuctionController> logger)
     {
         _auctionRepository = auctionRepository;
@@ -34,6 +38,7 @@ public class AuctionController : ControllerBase
         _productRepository = productRepository;
         _userRepository = userRepository;
         _bidRepository = bidRepository;
+        _hubContext = hubContext;
         _logger = logger;
     }
 
@@ -133,6 +138,18 @@ public class AuctionController : ControllerBase
                 return NotFound(new { message = "Auction not found" });
             }
 
+            // Auto-activate auction if it's time to start
+            if (auction.Status == AuctionStatus.Draft)
+            {
+                var now = DateTime.UtcNow;
+                if (now >= auction.StartTime && now < auction.EndTime)
+                {
+                    _logger.LogInformation($"Auto-activating auction {id} - time has come");
+                    auction.Status = AuctionStatus.Active;
+                    await _auctionRepository.UpdateAsync(auction);
+                }
+            }
+
             var response = await MapToResponseDto(auction);
             return Ok(response);
         }
@@ -186,6 +203,15 @@ public class AuctionController : ControllerBase
                 return BadRequest(new { message = "Bid increment must be at least 1,000 VND" });
             }
 
+            // Validate buyout price if provided
+            if (request.BuyoutPrice.HasValue)
+            {
+                if (request.BuyoutPrice.Value < request.StartingPrice * 1.5m)
+                {
+                    return BadRequest(new { message = "Buyout price must be at least 1.5x the starting price" });
+                }
+            }
+
             // Validate duration (minimum 60 minutes)
             if (request.Duration < 60)
             {
@@ -214,7 +240,8 @@ public class AuctionController : ControllerBase
                 ProductId = request.ProductId,
                 Images = request.Images,
                 BidIncrement = request.BidIncrement,
-                AutoExtendDuration = request.AutoExtendDuration
+                AutoExtendDuration = request.AutoExtendDuration,
+                BuyoutPrice = request.BuyoutPrice
             };
 
             var created = await _auctionRepository.CreateAsync(auction);
@@ -282,6 +309,15 @@ public class AuctionController : ControllerBase
                 auction.BidIncrement = request.BidIncrement.Value;
             if (request.AutoExtendDuration.HasValue)
                 auction.AutoExtendDuration = request.AutoExtendDuration;
+            if (request.BuyoutPrice.HasValue)
+            {
+                // Validate buyout price
+                if (request.BuyoutPrice.Value < auction.StartingPrice * 1.5m)
+                {
+                    return BadRequest(new { message = "Buyout price must be at least 1.5x the starting price" });
+                }
+                auction.BuyoutPrice = request.BuyoutPrice;
+            }
 
             var updated = await _auctionRepository.UpdateAsync(auction);
             var response = await MapToResponseDto(updated);
@@ -399,6 +435,13 @@ public class AuctionController : ControllerBase
         var product = await _productRepository.GetByIdAsync(auction.ProductId);
         var seller = await _userRepository.GetByIdAsync(auction.SellerId);
         var bids = await _bidRepository.GetByAuctionIdAsync(auction.Id ?? "");
+        
+        // Get winner info if exists
+        User? winner = null;
+        if (!string.IsNullOrEmpty(auction.WinnerId))
+        {
+            winner = await _userRepository.GetByIdAsync(auction.WinnerId);
+        }
 
         return new AuctionResponseDto
         {
@@ -433,6 +476,10 @@ public class AuctionController : ControllerBase
             Images = auction.Images,
             BidIncrement = auction.BidIncrement,
             AutoExtendDuration = auction.AutoExtendDuration,
+            BuyoutPrice = auction.BuyoutPrice,
+            WinnerId = auction.WinnerId,
+            WinnerName = winner?.FullName,
+            EndReason = auction.EndReason,
             CreatedAt = auction.CreatedAt,
             UpdatedAt = auction.UpdatedAt,
             BidCount = bids.Count
@@ -447,5 +494,230 @@ public class AuctionController : ControllerBase
             result.Add(await MapToResponseDto(auction));
         }
         return result;
+    }
+
+    [HttpPost("{id}/accept-bid")]
+    public async Task<IActionResult> AcceptBid(string id, [FromBody] AcceptBidDto? request = null)
+    {
+        try
+        {
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (string.IsNullOrEmpty(userId))
+            {
+                return Unauthorized(new { message = "User not authenticated" });
+            }
+
+            var auction = await _auctionRepository.GetByIdAsync(id);
+            if (auction == null)
+            {
+                return NotFound(new { message = "Auction not found" });
+            }
+
+            // Only seller can accept bid
+            if (auction.SellerId != userId)
+            {
+                return Forbid();
+            }
+
+            // Must be Active status
+            if (auction.Status != AuctionStatus.Active)
+            {
+                return BadRequest(new { message = "Can only accept bids for active auctions" });
+            }
+
+            // Must have at least 1 bid
+            var bids = await _bidRepository.GetByAuctionIdAsync(id);
+            if (!bids.Any())
+            {
+                return BadRequest(new { message = "No bids to accept" });
+            }
+
+            // Current price must be >= reserve price (if set)
+            if (auction.ReservePrice.HasValue && auction.CurrentPrice < auction.ReservePrice.Value)
+            {
+                return BadRequest(new { message = $"Current price ({auction.CurrentPrice:N0}) must reach reserve price ({auction.ReservePrice:N0}) to accept" });
+            }
+
+            // Get highest bidder
+            var highestBid = bids.OrderByDescending(b => b.Amount).First();
+
+            // Update auction
+            auction.Status = AuctionStatus.Completed;
+            auction.WinnerId = highestBid.UserId;
+            auction.EndReason = "accepted";
+            auction.UpdatedAt = DateTime.UtcNow;
+            
+            await _auctionRepository.UpdateAsync(auction);
+
+            // Get winner info
+            var winner = await _userRepository.GetByIdAsync(highestBid.UserId);
+
+            // Notify via SignalR
+            await AuctionHub.NotifyAuctionAccepted(_hubContext, id, new
+            {
+                AuctionId = id,
+                AuctionTitle = auction.Title,
+                WinnerId = highestBid.UserId,
+                WinnerName = winner?.FullName,
+                WinningBid = highestBid.Amount,
+                Message = request?.Message
+            });
+
+            var response = await MapToResponseDto(auction);
+            return Ok(response);
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return Forbid();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error accepting bid");
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
+    [HttpPost("{id}/buyout")]
+    public async Task<IActionResult> Buyout(string id)
+    {
+        try
+        {
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (string.IsNullOrEmpty(userId))
+            {
+                return Unauthorized(new { message = "User not authenticated" });
+            }
+
+            var auction = await _auctionRepository.GetByIdAsync(id);
+            if (auction == null)
+            {
+                return NotFound(new { message = "Auction not found" });
+            }
+
+            // Cannot buyout own auction
+            if (auction.SellerId == userId)
+            {
+                return BadRequest(new { message = "You cannot buyout your own auction" });
+            }
+
+            // Must be Active
+            if (auction.Status != AuctionStatus.Active)
+            {
+                return BadRequest(new { message = "Auction is not active" });
+            }
+
+            // Must have buyout price set
+            if (!auction.BuyoutPrice.HasValue)
+            {
+                return BadRequest(new { message = "This auction does not have a buyout option" });
+            }
+
+            // Create final bid with buyout price
+            var buyoutBid = new Bid
+            {
+                AuctionId = id,
+                UserId = userId,
+                Amount = auction.BuyoutPrice.Value,
+                Timestamp = DateTime.UtcNow
+            };
+            
+            await _bidRepository.CreateAsync(buyoutBid, auction.CurrentPrice, auction.BidIncrement);
+            await _auctionRepository.UpdateCurrentPriceAsync(id, auction.BuyoutPrice.Value);
+
+            // Complete auction immediately
+            auction.Status = AuctionStatus.Completed;
+            auction.CurrentPrice = auction.BuyoutPrice.Value;
+            auction.WinnerId = userId;
+            auction.EndReason = "buyout";
+            auction.UpdatedAt = DateTime.UtcNow;
+            
+            await _auctionRepository.UpdateAsync(auction);
+
+            // Get buyer info
+            var buyer = await _userRepository.GetByIdAsync(userId);
+
+            // Notify via SignalR
+            await AuctionHub.NotifyAuctionBuyout(_hubContext, id, new
+            {
+                AuctionId = id,
+                AuctionTitle = auction.Title,
+                BuyerId = userId,
+                BuyerName = buyer?.FullName,
+                BuyoutPrice = auction.BuyoutPrice.Value
+            });
+
+            var response = await MapToResponseDto(auction);
+            return Ok(response);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error processing buyout");
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
+    [HttpPost("{id}/cancel")]
+    public async Task<IActionResult> CancelAuction(string id)
+    {
+        try
+        {
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (string.IsNullOrEmpty(userId))
+            {
+                return Unauthorized(new { message = "User not authenticated" });
+            }
+
+            var auction = await _auctionRepository.GetByIdAsync(id);
+            if (auction == null)
+            {
+                return NotFound(new { message = "Auction not found" });
+            }
+
+            // Only seller can cancel
+            if (auction.SellerId != userId)
+            {
+                return Forbid();
+            }
+
+            // Check if can cancel
+            var bids = await _bidRepository.GetByAuctionIdAsync(id);
+            if (auction.Status == AuctionStatus.Active && bids.Any())
+            {
+                return BadRequest(new { message = "Cannot cancel auction with existing bids. Consider accepting the current bid instead." });
+            }
+
+            // Can only cancel Draft or Active (with no bids)
+            if (auction.Status != AuctionStatus.Draft && auction.Status != AuctionStatus.Active)
+            {
+                return BadRequest(new { message = "Can only cancel draft or active auctions" });
+            }
+
+            // Update auction
+            auction.Status = AuctionStatus.Cancelled;
+            auction.EndReason = "cancelled";
+            auction.UpdatedAt = DateTime.UtcNow;
+            
+            await _auctionRepository.UpdateAsync(auction);
+
+            // Notify via SignalR if had bidders/watchers
+            await AuctionHub.NotifyAuctionCancelled(_hubContext, id, new
+            {
+                AuctionId = id,
+                AuctionTitle = auction.Title,
+                Reason = "Seller cancelled the auction"
+            });
+
+            var response = await MapToResponseDto(auction);
+            return Ok(response);
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return Forbid();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error cancelling auction");
+            return BadRequest(new { message = ex.Message });
+        }
     }
 }

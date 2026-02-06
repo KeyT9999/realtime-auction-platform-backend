@@ -24,6 +24,10 @@ public class AuctionResponseDto
     public List<string> Images { get; set; } = new();
     public decimal BidIncrement { get; set; }
     public int? AutoExtendDuration { get; set; }
+    public decimal? BuyoutPrice { get; set; }
+    public string? WinnerId { get; set; }
+    public string? WinnerName { get; set; }
+    public string? EndReason { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
     public int BidCount { get; set; }

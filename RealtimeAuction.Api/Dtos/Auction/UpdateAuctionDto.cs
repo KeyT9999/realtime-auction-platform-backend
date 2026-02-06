@@ -30,4 +30,7 @@ public class UpdateAuctionDto
     public decimal? BidIncrement { get; set; }
 
     public int? AutoExtendDuration { get; set; }
+
+    [Range(0.01, double.MaxValue, ErrorMessage = "Buyout price must be greater than 0")]
+    public decimal? BuyoutPrice { get; set; }
 }

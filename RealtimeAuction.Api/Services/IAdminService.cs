@@ -13,4 +13,10 @@ public interface IAdminService
     Task<UserListResponse> UnlockUserAsync(string userId);
     Task<UserListResponse> ChangeUserRoleAsync(string userId, ChangeRoleRequest request);
     Task<UserStatsResponse> GetUserStatsAsync();
+    
+    // Bulk actions
+    Task<int> BulkLockUsersAsync(List<string> userIds, string? reason, string currentAdminId);
+    Task<int> BulkUnlockUsersAsync(List<string> userIds);
+    Task<int> BulkDeleteUsersAsync(List<string> userIds, string currentAdminId);
+    Task<int> BulkChangeRoleAsync(List<string> userIds, string role);
 }

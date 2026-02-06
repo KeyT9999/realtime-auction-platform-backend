@@ -1,9 +1,11 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.SignalR;
 using RealtimeAuction.Api.Dtos.Bid;
 using RealtimeAuction.Api.Helpers;
 using RealtimeAuction.Api.Models;
 using RealtimeAuction.Api.Repositories;
+using RealtimeAuction.Api.Hubs;
 using System.Security.Claims;
 
 namespace RealtimeAuction.Api.Controllers;
@@ -15,15 +17,21 @@ public class BidController : ControllerBase
 {
     private readonly IBidRepository _bidRepository;
     private readonly IAuctionRepository _auctionRepository;
+    private readonly IUserRepository _userRepository;
+    private readonly IHubContext<AuctionHub> _hubContext;
     private readonly ILogger<BidController> _logger;
 
     public BidController(
         IBidRepository bidRepository,
         IAuctionRepository auctionRepository,
+        IUserRepository userRepository,
+        IHubContext<AuctionHub> hubContext,
         ILogger<BidController> logger)
     {
         _bidRepository = bidRepository;
         _auctionRepository = auctionRepository;
+        _userRepository = userRepository;
+        _hubContext = hubContext;
         _logger = logger;
     }
 
@@ -137,11 +145,23 @@ public class BidController : ControllerBase
             // Update auction current price
             await _auctionRepository.UpdateCurrentPriceAsync(request.AuctionId, request.Amount);
 
+            // Get user info for the bid
+            var user = await _userRepository.GetByIdAsync(userId);
+            var userName = user?.FullName ?? "Anonymous";
+
+            // Get all previous bids to find who got outbid
+            var previousBids = await _bidRepository.GetByAuctionIdAsync(request.AuctionId);
+            var previousWinningBid = previousBids
+                .Where(b => b.UserId != userId && b.Id != created.Id)
+                .OrderByDescending(b => b.Amount)
+                .FirstOrDefault();
+
             var response = new BidResponseDto
             {
                 Id = created.Id ?? "",
                 AuctionId = created.AuctionId,
                 UserId = created.UserId,
+                UserName = userName,
                 Amount = created.Amount,
                 Timestamp = created.Timestamp,
                 IsWinningBid = created.IsWinningBid,
@@ -152,6 +172,29 @@ public class BidController : ControllerBase
                 } : null,
                 CreatedAt = created.CreatedAt
             };
+
+            // Broadcast new bid via SignalR
+            await AuctionHub.NotifyNewBid(_hubContext, request.AuctionId, new
+            {
+                Bid = response,
+                AuctionId = request.AuctionId,
+                CurrentPrice = request.Amount,
+                BidCount = previousBids.Count + 1
+            });
+
+            // Notify previous winning bidder that they've been outbid
+            if (previousWinningBid != null)
+            {
+                await AuctionHub.NotifyUserOutbid(_hubContext, previousWinningBid.UserId, new
+                {
+                    AuctionId = request.AuctionId,
+                    AuctionTitle = auction.Title,
+                    YourBid = previousWinningBid.Amount,
+                    NewBid = request.Amount,
+                    BidderName = userName
+                });
+            }
+
             return CreatedAtAction(nameof(GetBidsByAuction), new { auctionId = request.AuctionId }, response);
         }
         catch (ArgumentException ex)
