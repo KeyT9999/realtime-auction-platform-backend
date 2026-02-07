@@ -9,5 +9,7 @@ public class UserProfileResponse
     public bool IsEmailVerified { get; set; }
     public string? Phone { get; set; }
     public string? Address { get; set; }
+    public decimal AvailableBalance { get; set; }
+    public decimal EscrowBalance { get; set; }
     public DateTime CreatedAt { get; set; }
 }

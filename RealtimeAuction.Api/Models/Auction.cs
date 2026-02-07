@@ -56,6 +56,9 @@ public class Auction
     [BsonRepresentation(BsonType.ObjectId)]
     public string? WinnerId { get; set; } // User who won the auction (via buyout, accept bid, or natural end)
 
+    [BsonRepresentation(BsonType.Decimal128)]
+    public decimal? FinalPrice { get; set; } // Final price when auction ends
+
     public string? EndReason { get; set; } // Reason auction ended: "natural", "buyout", "accepted", "cancelled"
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;

@@ -19,4 +19,13 @@ public interface IAdminService
     Task<int> BulkUnlockUsersAsync(List<string> userIds);
     Task<int> BulkDeleteUsersAsync(List<string> userIds, string currentAdminId);
     Task<int> BulkChangeRoleAsync(List<string> userIds, string role);
+    
+    // User detail methods
+    Task<List<UserAuctionDto>> GetUserAuctionsAsync(string userId);
+    Task<List<UserBidDto>> GetUserBidsAsync(string userId);
+    Task<List<UserTransactionDto>> GetUserTransactionsAsync(string userId);
+    
+    // Balance management
+    Task<UserListResponse> AddBalanceAsync(string userId, AddBalanceRequest request);
+    Task<UserListResponse> SubtractBalanceAsync(string userId, SubtractBalanceRequest request);
 }

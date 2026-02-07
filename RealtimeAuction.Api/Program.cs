@@ -111,6 +111,26 @@ var mongoDbSettings = new MongoDbSettings
         ?? "realtime-auction-platform"
 };
 
+// Configure PayOS Settings
+var payOsSettings = new PayOsSettings
+{
+    ClientId = Environment.GetEnvironmentVariable("PAYOS_CLIENT_ID") 
+        ?? builder.Configuration["PayOS:ClientId"] 
+        ?? string.Empty,
+    ApiKey = Environment.GetEnvironmentVariable("PAYOS_API_KEY") 
+        ?? builder.Configuration["PayOS:ApiKey"] 
+        ?? string.Empty,
+    ChecksumKey = Environment.GetEnvironmentVariable("PAYOS_CHECKSUM_KEY") 
+        ?? builder.Configuration["PayOS:ChecksumKey"] 
+        ?? string.Empty,
+    ReturnUrl = Environment.GetEnvironmentVariable("PAYOS_RETURN_URL") 
+        ?? builder.Configuration["PayOS:ReturnUrl"] 
+        ?? "http://localhost:5173/payment/success",
+    CancelUrl = Environment.GetEnvironmentVariable("PAYOS_CANCEL_URL") 
+        ?? builder.Configuration["PayOS:CancelUrl"] 
+        ?? "http://localhost:5173/payment/cancel"
+};
+
 // Configure JWT Settings
 var jwtSettings = new JwtSettings
 {
@@ -261,6 +281,7 @@ builder.Services.AddScoped<IAuctionRepository, AuctionRepository>();
 builder.Services.AddScoped<IBidRepository, BidRepository>();
 builder.Services.AddScoped<IWatchlistRepository, WatchlistRepository>();
 builder.Services.AddScoped<IShippingInfoRepository, ShippingInfoRepository>();
+builder.Services.AddScoped<ITransactionRepository, TransactionRepository>();
 
 // Register Services
 builder.Services.AddScoped<IAuthService, AuthService>();
@@ -269,6 +290,19 @@ builder.Services.AddScoped<IEmailService, EmailService>();
 builder.Services.AddScoped<ITokenService, TokenService>();
 builder.Services.AddScoped<IImageUploadService, ImageUploadService>();
 builder.Services.AddScoped<IProvinceService, ProvinceService>();
+builder.Services.AddScoped<IPaymentService, PaymentService>();
+builder.Services.AddScoped<IBidService, BidService>();
+
+// Configure PayOS
+builder.Services.Configure<PayOsSettings>(options =>
+{
+    options.ClientId = payOsSettings.ClientId;
+    options.ApiKey = payOsSettings.ApiKey;
+    options.ChecksumKey = payOsSettings.ChecksumKey;
+    options.ReturnUrl = payOsSettings.ReturnUrl;
+    options.CancelUrl = payOsSettings.CancelUrl;
+});
+builder.Services.AddHttpClient("PayOS");
 
 // Configure JWT Authentication
 builder.Services.AddAuthentication(options =>
@@ -301,6 +335,9 @@ builder.Services.AddAuthorization(options =>
 
 // Add Controllers
 builder.Services.AddControllers();
+
+// Add Background Services
+builder.Services.AddHostedService<RealtimeAuction.Api.BackgroundServices.AuctionEndBackgroundService>();
 
 // Add SignalR
 builder.Services.AddSignalR();

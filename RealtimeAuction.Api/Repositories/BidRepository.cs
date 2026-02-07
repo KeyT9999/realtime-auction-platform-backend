@@ -67,4 +67,10 @@ public class BidRepository : IBidRepository
     {
         return await _bids.Find(_ => true).ToListAsync();
     }
+
+    public async Task<Bid> UpdateAsync(Bid bid)
+    {
+        await _bids.ReplaceOneAsync(b => b.Id == bid.Id, bid);
+        return bid;
+    }
 }

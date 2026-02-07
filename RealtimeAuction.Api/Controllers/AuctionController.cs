@@ -2,11 +2,13 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
 using RealtimeAuction.Api.Dtos.Auction;
+using RealtimeAuction.Api.Dtos.Bid;
 using RealtimeAuction.Api.Helpers;
 using RealtimeAuction.Api.Hubs;
 using RealtimeAuction.Api.Models;
 using RealtimeAuction.Api.Models.Enums;
 using RealtimeAuction.Api.Repositories;
+using RealtimeAuction.Api.Services;
 using System.Security.Claims;
 
 namespace RealtimeAuction.Api.Controllers;
@@ -21,6 +23,8 @@ public class AuctionController : ControllerBase
     private readonly IProductRepository _productRepository;
     private readonly IUserRepository _userRepository;
     private readonly IBidRepository _bidRepository;
+    private readonly IBidService _bidService;
+    private readonly ITransactionRepository _transactionRepository;
     private readonly IHubContext<AuctionHub> _hubContext;
     private readonly ILogger<AuctionController> _logger;
 
@@ -30,6 +34,8 @@ public class AuctionController : ControllerBase
         IProductRepository productRepository,
         IUserRepository userRepository,
         IBidRepository bidRepository,
+        IBidService bidService,
+        ITransactionRepository transactionRepository,
         IHubContext<AuctionHub> hubContext,
         ILogger<AuctionController> logger)
     {
@@ -38,6 +44,8 @@ public class AuctionController : ControllerBase
         _productRepository = productRepository;
         _userRepository = userRepository;
         _bidRepository = bidRepository;
+        _bidService = bidService;
+        _transactionRepository = transactionRepository;
         _hubContext = hubContext;
         _logger = logger;
     }
@@ -541,6 +549,37 @@ public class AuctionController : ControllerBase
             // Get highest bidder
             var highestBid = bids.OrderByDescending(b => b.Amount).First();
 
+            // Kiểm tra winner có hold balance đủ không
+            var winner = await _userRepository.GetByIdAsync(highestBid.UserId);
+            if (winner == null)
+            {
+                return BadRequest(new { message = "Winner not found" });
+            }
+
+            // Kiểm tra hold balance
+            var userBids = bids.Where(b => b.UserId == highestBid.UserId && !b.IsHoldReleased).ToList();
+            var totalHeld = userBids.Any() ? userBids.Max(b => b.HeldAmount) : 0;
+
+            if (totalHeld < highestBid.Amount)
+            {
+                // Cần hold thêm
+                var neededAmount = highestBid.Amount - totalHeld;
+                if (winner.AvailableBalance < neededAmount)
+                {
+                    return BadRequest(new { message = $"Winner không đủ số dư. Cần {highestBid.Amount:N0}đ, hiện có hold {totalHeld:N0}đ và available {winner.AvailableBalance:N0}đ" });
+                }
+
+                // Đảm bảo hold đủ
+                var ensured = await _bidService.EnsureHoldAsync(highestBid.UserId, id, highestBid.Amount);
+                if (!ensured)
+                {
+                    return BadRequest(new { message = "Không thể đảm bảo hold balance cho winner" });
+                }
+            }
+
+            // Release hold của các losers
+            await _bidService.ReleaseAllHoldsExceptWinnerAsync(id, highestBid.UserId);
+
             // Update auction
             auction.Status = AuctionStatus.Completed;
             auction.WinnerId = highestBid.UserId;
@@ -549,8 +588,38 @@ public class AuctionController : ControllerBase
             
             await _auctionRepository.UpdateAsync(auction);
 
-            // Get winner info
-            var winner = await _userRepository.GetByIdAsync(highestBid.UserId);
+            // Tạo Transaction Pending (giữ hold, chờ confirm)
+            var updatedWinner = await _userRepository.GetByIdAsync(highestBid.UserId);
+            if (updatedWinner != null)
+            {
+                var activeBid = bids
+                    .Where(b => b.UserId == highestBid.UserId && !b.IsHoldReleased)
+                    .OrderByDescending(b => b.Amount)
+                    .FirstOrDefault();
+
+                if (activeBid != null)
+                {
+                    var pendingTransaction = new Transaction
+                    {
+                        UserId = highestBid.UserId,
+                        Type = TransactionType.Payment,
+                        Amount = -activeBid.HeldAmount,
+                        Description = $"Thanh toán đấu giá (seller chấp nhận) - chờ xác nhận",
+                        RelatedAuctionId = id,
+                        RelatedBidId = activeBid.Id,
+                        Status = TransactionStatus.Pending,
+                        BuyerConfirmed = false,
+                        SellerConfirmed = false,
+                        BalanceBefore = updatedWinner.EscrowBalance,
+                        BalanceAfter = updatedWinner.EscrowBalance, // Giữ nguyên vì chưa chuyển
+                        CreatedAt = DateTime.UtcNow
+                    };
+                    await _transactionRepository.CreateAsync(pendingTransaction);
+                }
+            }
+
+            // Get winner info (reuse existing winner variable)
+            winner = await _userRepository.GetByIdAsync(highestBid.UserId);
 
             // Notify via SignalR
             await AuctionHub.NotifyAuctionAccepted(_hubContext, id, new
@@ -612,17 +681,31 @@ public class AuctionController : ControllerBase
                 return BadRequest(new { message = "This auction does not have a buyout option" });
             }
 
-            // Create final bid with buyout price
-            var buyoutBid = new Bid
+            // Sử dụng BidService để hold balance
+            var buyoutBidDto = new CreateBidDto
             {
                 AuctionId = id,
-                UserId = userId,
-                Amount = auction.BuyoutPrice.Value,
-                Timestamp = DateTime.UtcNow
+                Amount = auction.BuyoutPrice.Value
             };
-            
-            await _bidRepository.CreateAsync(buyoutBid, auction.CurrentPrice, auction.BidIncrement);
-            await _auctionRepository.UpdateCurrentPriceAsync(id, auction.BuyoutPrice.Value);
+
+            var bidResult = await _bidService.PlaceBidAsync(userId, buyoutBidDto);
+            if (!bidResult.Success)
+            {
+                return BadRequest(new { message = bidResult.ErrorMessage });
+            }
+
+            // Release hold của các bidders khác (nếu có)
+            var allBids = await _bidRepository.GetByAuctionIdAsync(id);
+            var otherBidders = allBids
+                .Where(b => b.UserId != userId && !b.IsHoldReleased)
+                .Select(b => b.UserId)
+                .Distinct()
+                .ToList();
+
+            foreach (var otherUserId in otherBidders)
+            {
+                await _bidService.ReleaseHoldAsync(otherUserId, id);
+            }
 
             // Complete auction immediately
             auction.Status = AuctionStatus.Completed;
@@ -633,8 +716,27 @@ public class AuctionController : ControllerBase
             
             await _auctionRepository.UpdateAsync(auction);
 
-            // Get buyer info
+            // Tạo Transaction Pending (giữ hold, chờ confirm)
             var buyer = await _userRepository.GetByIdAsync(userId);
+            if (buyer != null && bidResult.Bid != null)
+            {
+                var pendingTransaction = new Transaction
+                {
+                    UserId = userId,
+                    Type = TransactionType.Payment,
+                    Amount = -bidResult.Bid.HeldAmount,
+                    Description = $"Thanh toán mua ngay - chờ xác nhận",
+                    RelatedAuctionId = id,
+                    RelatedBidId = bidResult.Bid.Id,
+                    Status = TransactionStatus.Pending,
+                    BuyerConfirmed = false,
+                    SellerConfirmed = false,
+                    BalanceBefore = buyer.EscrowBalance,
+                    BalanceAfter = buyer.EscrowBalance, // Giữ nguyên vì chưa chuyển
+                    CreatedAt = DateTime.UtcNow
+                };
+                await _transactionRepository.CreateAsync(pendingTransaction);
+            }
 
             // Notify via SignalR
             await AuctionHub.NotifyAuctionBuyout(_hubContext, id, new
@@ -681,15 +783,17 @@ public class AuctionController : ControllerBase
 
             // Check if can cancel
             var bids = await _bidRepository.GetByAuctionIdAsync(id);
-            if (auction.Status == AuctionStatus.Active && bids.Any())
-            {
-                return BadRequest(new { message = "Cannot cancel auction with existing bids. Consider accepting the current bid instead." });
-            }
-
-            // Can only cancel Draft or Active (with no bids)
+            
+            // Can only cancel Draft or Active
             if (auction.Status != AuctionStatus.Draft && auction.Status != AuctionStatus.Active)
             {
                 return BadRequest(new { message = "Can only cancel draft or active auctions" });
+            }
+
+            // Nếu có bids, release hold cho tất cả bidders trước khi cancel
+            if (bids.Any())
+            {
+                await _bidService.ReleaseAllHoldsAsync(id);
             }
 
             // Update auction
@@ -717,6 +821,87 @@ public class AuctionController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error cancelling auction");
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
+    [HttpPost("{id}/confirm-transaction")]
+    public async Task<IActionResult> ConfirmTransaction(string id)
+    {
+        try
+        {
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (string.IsNullOrEmpty(userId))
+            {
+                return Unauthorized(new { message = "User not authenticated" });
+            }
+
+            var auction = await _auctionRepository.GetByIdAsync(id);
+            if (auction == null)
+            {
+                return NotFound(new { message = "Auction not found" });
+            }
+
+            // Xác định user là buyer hay seller
+            bool isBuyer = auction.WinnerId == userId;
+            bool isSeller = auction.SellerId == userId;
+
+            if (!isBuyer && !isSeller)
+            {
+                return Forbid();
+            }
+
+            // Confirm transaction
+            var confirmed = await _bidService.ConfirmTransactionAsync(id, userId, isBuyer);
+            if (!confirmed)
+            {
+                return BadRequest(new { message = "Không thể xác nhận giao dịch. Vui lòng kiểm tra lại trạng thái đấu giá." });
+            }
+
+            return Ok(new { message = "Xác nhận giao dịch thành công" });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error confirming transaction");
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
+    [HttpPost("{id}/cancel-transaction")]
+    public async Task<IActionResult> CancelTransaction(string id)
+    {
+        try
+        {
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (string.IsNullOrEmpty(userId))
+            {
+                return Unauthorized(new { message = "User not authenticated" });
+            }
+
+            var auction = await _auctionRepository.GetByIdAsync(id);
+            if (auction == null)
+            {
+                return NotFound(new { message = "Auction not found" });
+            }
+
+            // Chỉ buyer hoặc seller mới được cancel
+            if (auction.WinnerId != userId && auction.SellerId != userId)
+            {
+                return Forbid();
+            }
+
+            // Cancel transaction và refund
+            var cancelled = await _bidService.CancelTransactionAsync(id, userId);
+            if (!cancelled)
+            {
+                return BadRequest(new { message = "Không thể hủy giao dịch. Vui lòng kiểm tra lại trạng thái." });
+            }
+
+            return Ok(new { message = "Hủy giao dịch và hoàn tiền thành công" });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error cancelling transaction");
             return BadRequest(new { message = ex.Message });
         }
     }

@@ -51,6 +51,8 @@ public class UsersController : ControllerBase
                 IsEmailVerified = user.IsEmailVerified,
                 Phone = user.Phone,
                 Address = user.Address,
+                AvailableBalance = user.AvailableBalance,
+                EscrowBalance = user.EscrowBalance,
                 CreatedAt = user.CreatedAt
             };
 
@@ -97,6 +99,8 @@ public class UsersController : ControllerBase
                 IsEmailVerified = user.IsEmailVerified,
                 Phone = user.Phone,
                 Address = user.Address,
+                AvailableBalance = user.AvailableBalance,
+                EscrowBalance = user.EscrowBalance,
                 CreatedAt = user.CreatedAt
             };
 
