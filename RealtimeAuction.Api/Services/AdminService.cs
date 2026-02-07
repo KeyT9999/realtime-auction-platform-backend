@@ -2,6 +2,7 @@ using MongoDB.Driver;
 using RealtimeAuction.Api.Dtos.Admin;
 using RealtimeAuction.Api.Helpers;
 using RealtimeAuction.Api.Models;
+using RealtimeAuction.Api.Repositories;
 using BCrypt.Net;
 
 namespace RealtimeAuction.Api.Services;
@@ -10,11 +11,25 @@ public class AdminService : IAdminService
 {
     private readonly IMongoCollection<User> _users;
     private readonly ILogger<AdminService> _logger;
+    private readonly IAuctionRepository _auctionRepository;
+    private readonly IBidRepository _bidRepository;
+    private readonly ITransactionRepository _transactionRepository;
+    private readonly IUserRepository _userRepository;
 
-    public AdminService(IMongoDatabase database, ILogger<AdminService> logger)
+    public AdminService(
+        IMongoDatabase database, 
+        ILogger<AdminService> logger, 
+        IAuctionRepository auctionRepository, 
+        IBidRepository bidRepository,
+        ITransactionRepository transactionRepository,
+        IUserRepository userRepository)
     {
         _users = database.GetCollection<User>("Users");
         _logger = logger;
+        _auctionRepository = auctionRepository;
+        _bidRepository = bidRepository;
+        _transactionRepository = transactionRepository;
+        _userRepository = userRepository;
     }
 
     public async Task<UserListPaginatedResponse> GetUsersAsync(int page, int pageSize, string? search, string? role, bool? isLocked)
@@ -433,5 +448,184 @@ public class AdminService : IAdminService
         _logger.LogInformation("Admin bulk changed role to {Role} for {Count} users", role, result.ModifiedCount);
         
         return (int)result.ModifiedCount;
+    }
+    
+    // User detail methods
+    public async Task<List<UserAuctionDto>> GetUserAuctionsAsync(string userId)
+    {
+        var auctions = await _auctionRepository.GetBySellerIdAsync(userId);
+        
+        return auctions.Select(a => new UserAuctionDto
+        {
+            Id = a.Id!,
+            Title = a.Title,
+            Status = a.Status.ToString(),
+            StartingPrice = a.StartingPrice,
+            CurrentPrice = a.CurrentPrice,
+            BidCount = a.BidCount,
+            StartTime = a.StartTime,
+            EndTime = a.EndTime,
+            WinnerId = a.WinnerId,
+            EndReason = a.EndReason
+        }).ToList();
+    }
+    
+    public async Task<List<UserBidDto>> GetUserBidsAsync(string userId)
+    {
+        var bids = await _bidRepository.GetByUserIdAsync(userId);
+        var bidDtos = new List<UserBidDto>();
+        
+        foreach (var bid in bids)
+        {
+            var auction = await _auctionRepository.GetByIdAsync(bid.AuctionId);
+            var highestBid = await _bidRepository.GetHighestBidAsync(bid.AuctionId);
+            
+            var isWinning = highestBid != null && highestBid.Id == bid.Id;
+            var status = "Active";
+            
+            if (auction != null)
+            {
+                if (auction.Status == Models.Enums.AuctionStatus.Completed)
+                {
+                    status = (auction.WinnerId == userId) ? "Won" : "Lost";
+                }
+                else if (auction.Status == Models.Enums.AuctionStatus.Cancelled)
+                {
+                    status = "Refunded";
+                }
+            }
+            
+            bidDtos.Add(new UserBidDto
+            {
+                Id = bid.Id!,
+                AuctionId = bid.AuctionId,
+                AuctionTitle = auction?.Title ?? "Unknown",
+                BidAmount = bid.Amount,
+                BidTime = bid.Timestamp,
+                IsWinning = isWinning,
+                Status = status
+            });
+        }
+        
+        return bidDtos;
+    }
+    
+    public async Task<List<UserTransactionDto>> GetUserTransactionsAsync(string userId)
+    {
+        var transactions = await _transactionRepository.GetByUserIdAsync(userId);
+        
+        return transactions.Select(t => new UserTransactionDto
+        {
+            Id = t.Id!,
+            Type = t.Type.ToString(),
+            Amount = t.Amount,
+            Reason = t.Description,
+            CreatedAt = t.CreatedAt,
+            RelatedAuctionId = t.RelatedAuctionId
+        }).ToList();
+    }
+    
+    // Balance management
+    public async Task<UserListResponse> AddBalanceAsync(string userId, AddBalanceRequest request)
+    {
+        var user = await _userRepository.GetByIdAsync(userId);
+        if (user == null)
+        {
+            throw new Exception("Người dùng không tồn tại");
+        }
+        
+        // Add balance
+        user.AvailableBalance += request.Amount;
+        user.UpdatedAt = DateTime.UtcNow;
+        
+        await _userRepository.UpdateAsync(user);
+        
+        // Create transaction record
+        var transaction = new Transaction
+        {
+            UserId = userId,
+            Type = Models.Enums.TransactionType.AdminAdjustment,
+            Amount = request.Amount,
+            Description = request.Reason ?? "Admin nạp tiền",
+            BalanceBefore = user.AvailableBalance - request.Amount,
+            BalanceAfter = user.AvailableBalance,
+            CreatedAt = DateTime.UtcNow
+        };
+        
+        await _transactionRepository.CreateAsync(transaction);
+        
+        _logger.LogInformation("Admin added {Amount} to user {UserId}", request.Amount, userId);
+        
+        return new UserListResponse
+        {
+            Id = user.Id!,
+            Email = user.Email,
+            FullName = user.FullName,
+            Role = user.Role ?? "User",
+            IsEmailVerified = user.IsEmailVerified,
+            IsLocked = user.IsLocked,
+            LockedAt = user.LockedAt,
+            LockedReason = user.LockedReason,
+            Phone = user.Phone,
+            Address = user.Address,
+            AvailableBalance = user.AvailableBalance,
+            EscrowBalance = user.EscrowBalance,
+            CreatedAt = user.CreatedAt,
+            UpdatedAt = user.UpdatedAt
+        };
+    }
+    
+    public async Task<UserListResponse> SubtractBalanceAsync(string userId, SubtractBalanceRequest request)
+    {
+        var user = await _userRepository.GetByIdAsync(userId);
+        if (user == null)
+        {
+            throw new Exception("Người dùng không tồn tại");
+        }
+        
+        if (user.AvailableBalance < request.Amount)
+        {
+            throw new Exception("Số dư không đủ để thực hiện giao dịch");
+        }
+        
+        // Subtract balance
+        user.AvailableBalance -= request.Amount;
+        user.UpdatedAt = DateTime.UtcNow;
+        
+        await _userRepository.UpdateAsync(user);
+        
+        // Create transaction record
+        var transaction = new Transaction
+        {
+            UserId = userId,
+            Type = Models.Enums.TransactionType.AdminAdjustment,
+            Amount = -request.Amount, // Negative for subtraction
+            Description = request.Reason ?? "Admin trừ tiền",
+            BalanceBefore = user.AvailableBalance + request.Amount,
+            BalanceAfter = user.AvailableBalance,
+            CreatedAt = DateTime.UtcNow
+        };
+        
+        await _transactionRepository.CreateAsync(transaction);
+        
+        _logger.LogInformation("Admin subtracted {Amount} from user {UserId}", request.Amount, userId);
+        
+        return new UserListResponse
+        {
+            Id = user.Id!,
+            Email = user.Email,
+            FullName = user.FullName,
+            Role = user.Role ?? "User",
+            IsEmailVerified = user.IsEmailVerified,
+            IsLocked = user.IsLocked,
+            LockedAt = user.LockedAt,
+            LockedReason = user.LockedReason,
+            Phone = user.Phone,
+            Address = user.Address,
+            AvailableBalance = user.AvailableBalance,
+            EscrowBalance = user.EscrowBalance,
+            CreatedAt = user.CreatedAt,
+            UpdatedAt = user.UpdatedAt
+        };
     }
 }

@@ -22,6 +22,11 @@ public class Bid
 
     public bool IsWinningBid { get; set; } = false;
 
+    [BsonRepresentation(BsonType.Decimal128)]
+    public decimal HeldAmount { get; set; } = 0;  // Số tiền đang hold cho bid này
+
+    public bool IsHoldReleased { get; set; } = false;  // Đã release hold chưa
+
     public AutoBidSettings? AutoBid { get; set; } // Nested class - structure only, logic not implemented
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;

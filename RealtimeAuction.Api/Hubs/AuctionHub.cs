@@ -151,6 +151,34 @@ public class AuctionHub : Hub
         await hubContext.Clients.Group(auctionId).SendAsync("AuctionCancelled", cancelData);
     }
 
+    // Notify user that they won the auction
+    public static async Task NotifyUserWon(IHubContext<AuctionHub> hubContext, string userId, object winData)
+    {
+        var userConnectionIds = _userConnections
+            .Where(kvp => kvp.Value == userId)
+            .Select(kvp => kvp.Key)
+            .ToList();
+
+        if (userConnectionIds.Any())
+        {
+            await hubContext.Clients.Clients(userConnectionIds).SendAsync("UserWon", winData);
+        }
+    }
+
+    // Notify user that their balance hold was released (outbid)
+    public static async Task NotifyBalanceReleased(IHubContext<AuctionHub> hubContext, string userId, object releaseData)
+    {
+        var userConnectionIds = _userConnections
+            .Where(kvp => kvp.Value == userId)
+            .Select(kvp => kvp.Key)
+            .ToList();
+
+        if (userConnectionIds.Any())
+        {
+            await hubContext.Clients.Clients(userConnectionIds).SendAsync("BalanceReleased", releaseData);
+        }
+    }
+
     // Get current viewer count for an auction
     public int GetViewerCount(string auctionId)
     {

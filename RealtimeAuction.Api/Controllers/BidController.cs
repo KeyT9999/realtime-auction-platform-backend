@@ -5,6 +5,7 @@ using RealtimeAuction.Api.Dtos.Bid;
 using RealtimeAuction.Api.Helpers;
 using RealtimeAuction.Api.Models;
 using RealtimeAuction.Api.Repositories;
+using RealtimeAuction.Api.Services;
 using RealtimeAuction.Api.Hubs;
 using System.Security.Claims;
 
@@ -18,6 +19,7 @@ public class BidController : ControllerBase
     private readonly IBidRepository _bidRepository;
     private readonly IAuctionRepository _auctionRepository;
     private readonly IUserRepository _userRepository;
+    private readonly IBidService _bidService;
     private readonly IHubContext<AuctionHub> _hubContext;
     private readonly ILogger<BidController> _logger;
 
@@ -25,12 +27,14 @@ public class BidController : ControllerBase
         IBidRepository bidRepository,
         IAuctionRepository auctionRepository,
         IUserRepository userRepository,
+        IBidService bidService,
         IHubContext<AuctionHub> hubContext,
         ILogger<BidController> logger)
     {
         _bidRepository = bidRepository;
         _auctionRepository = auctionRepository;
         _userRepository = userRepository;
+        _bidService = bidService;
         _hubContext = hubContext;
         _logger = logger;
     }
@@ -112,66 +116,43 @@ public class BidController : ControllerBase
                 return Unauthorized(new { message = "User not authenticated" });
             }
 
+            // Sử dụng BidService để xử lý logic hold balance
+            var result = await _bidService.PlaceBidAsync(userId, request);
+            
+            if (!result.Success)
+            {
+                return BadRequest(new { message = result.ErrorMessage });
+            }
+
             var auction = await _auctionRepository.GetByIdAsync(request.AuctionId);
             if (auction == null)
             {
                 return NotFound(new { message = "Auction not found" });
             }
 
-            if (auction.Status != Models.Enums.AuctionStatus.Active)
-            {
-                return BadRequest(new { message = "Auction is not active" });
-            }
-
-            if (auction.SellerId == userId)
-            {
-                return BadRequest(new { message = "You cannot bid on your own auction" });
-            }
-
-            var bid = new Bid
-            {
-                AuctionId = request.AuctionId,
-                UserId = userId,
-                Amount = request.Amount,
-                AutoBid = request.AutoBid != null ? new Bid.AutoBidSettings
-                {
-                    MaxBid = request.AutoBid.MaxBid,
-                    IsActive = request.AutoBid.IsActive
-                } : null
-            };
-
-            var created = await _bidRepository.CreateAsync(bid, auction.CurrentPrice, auction.BidIncrement);
-            
-            // Update auction current price
-            await _auctionRepository.UpdateCurrentPriceAsync(request.AuctionId, request.Amount);
-
             // Get user info for the bid
             var user = await _userRepository.GetByIdAsync(userId);
             var userName = user?.FullName ?? "Anonymous";
 
-            // Get all previous bids to find who got outbid
-            var previousBids = await _bidRepository.GetByAuctionIdAsync(request.AuctionId);
-            var previousWinningBid = previousBids
-                .Where(b => b.UserId != userId && b.Id != created.Id)
-                .OrderByDescending(b => b.Amount)
-                .FirstOrDefault();
-
             var response = new BidResponseDto
             {
-                Id = created.Id ?? "",
-                AuctionId = created.AuctionId,
-                UserId = created.UserId,
+                Id = result.Bid?.Id ?? "",
+                AuctionId = result.Bid?.AuctionId ?? request.AuctionId,
+                UserId = result.Bid?.UserId ?? userId,
                 UserName = userName,
-                Amount = created.Amount,
-                Timestamp = created.Timestamp,
-                IsWinningBid = created.IsWinningBid,
-                AutoBid = created.AutoBid != null ? new AutoBidSettingsDto
+                Amount = result.Bid?.Amount ?? request.Amount,
+                Timestamp = result.Bid?.Timestamp ?? DateTime.UtcNow,
+                IsWinningBid = result.Bid?.IsWinningBid ?? false,
+                AutoBid = result.Bid?.AutoBid != null ? new AutoBidSettingsDto
                 {
-                    MaxBid = created.AutoBid.MaxBid,
-                    IsActive = created.AutoBid.IsActive
+                    MaxBid = result.Bid.AutoBid.MaxBid,
+                    IsActive = result.Bid.AutoBid.IsActive
                 } : null,
-                CreatedAt = created.CreatedAt
+                CreatedAt = result.Bid?.CreatedAt ?? DateTime.UtcNow
             };
+
+            // Get all bids for count
+            var allBids = await _bidRepository.GetByAuctionIdAsync(request.AuctionId);
 
             // Broadcast new bid via SignalR
             await AuctionHub.NotifyNewBid(_hubContext, request.AuctionId, new
@@ -179,20 +160,30 @@ public class BidController : ControllerBase
                 Bid = response,
                 AuctionId = request.AuctionId,
                 CurrentPrice = request.Amount,
-                BidCount = previousBids.Count + 1
+                BidCount = allBids.Count
             });
 
             // Notify previous winning bidder that they've been outbid
-            if (previousWinningBid != null)
+            if (result.OutbidUserId != null)
             {
-                await AuctionHub.NotifyUserOutbid(_hubContext, previousWinningBid.UserId, new
+                var outbidUser = await _userRepository.GetByIdAsync(result.OutbidUserId);
+                var outbidBids = await _bidRepository.GetByAuctionIdAsync(request.AuctionId);
+                var outbidBid = outbidBids
+                    .Where(b => b.UserId == result.OutbidUserId)
+                    .OrderByDescending(b => b.Amount)
+                    .FirstOrDefault();
+
+                if (outbidBid != null)
                 {
-                    AuctionId = request.AuctionId,
-                    AuctionTitle = auction.Title,
-                    YourBid = previousWinningBid.Amount,
-                    NewBid = request.Amount,
-                    BidderName = userName
-                });
+                    await AuctionHub.NotifyUserOutbid(_hubContext, result.OutbidUserId, new
+                    {
+                        AuctionId = request.AuctionId,
+                        AuctionTitle = auction.Title,
+                        YourBid = outbidBid.Amount,
+                        NewBid = request.Amount,
+                        BidderName = userName
+                    });
+                }
             }
 
             return CreatedAtAction(nameof(GetBidsByAuction), new { auctionId = request.AuctionId }, response);

@@ -624,4 +624,81 @@ public class AdminController : ControllerBase
             return BadRequest(new { message = ex.Message });
         }
     }
+    
+    // User detail endpoints
+    [HttpGet("users/{id}/auctions")]
+    public async Task<IActionResult> GetUserAuctions(string id)
+    {
+        try
+        {
+            var auctions = await _adminService.GetUserAuctionsAsync(id);
+            return Ok(auctions);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting user auctions");
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+    
+    [HttpGet("users/{id}/bids")]
+    public async Task<IActionResult> GetUserBids(string id)
+    {
+        try
+        {
+            var bids = await _adminService.GetUserBidsAsync(id);
+            return Ok(bids);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting user bids");
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+    
+    [HttpGet("users/{id}/transactions")]
+    public async Task<IActionResult> GetUserTransactions(string id)
+    {
+        try
+        {
+            var transactions = await _adminService.GetUserTransactionsAsync(id);
+            return Ok(transactions);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting user transactions");
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+    
+    // Balance management endpoints
+    [HttpPost("users/{id}/balance/add")]
+    public async Task<IActionResult> AddBalance(string id, [FromBody] AddBalanceRequest request)
+    {
+        try
+        {
+            var user = await _adminService.AddBalanceAsync(id, request);
+            return Ok(user);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error adding balance");
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+    
+    [HttpPost("users/{id}/balance/subtract")]
+    public async Task<IActionResult> SubtractBalance(string id, [FromBody] SubtractBalanceRequest request)
+    {
+        try
+        {
+            var user = await _adminService.SubtractBalanceAsync(id, request);
+            return Ok(user);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error subtracting balance");
+            return BadRequest(new { message = ex.Message });
+        }
+    }
 }
