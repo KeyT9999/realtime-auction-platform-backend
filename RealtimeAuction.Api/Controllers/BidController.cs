@@ -21,6 +21,7 @@ public class BidController : ControllerBase
     private readonly IUserRepository _userRepository;
     private readonly IBidService _bidService;
     private readonly IHubContext<AuctionHub> _hubContext;
+    private readonly IEmailService _emailService;
     private readonly ILogger<BidController> _logger;
 
     public BidController(
@@ -29,6 +30,7 @@ public class BidController : ControllerBase
         IUserRepository userRepository,
         IBidService bidService,
         IHubContext<AuctionHub> hubContext,
+        IEmailService emailService,
         ILogger<BidController> logger)
     {
         _bidRepository = bidRepository;
@@ -36,6 +38,7 @@ public class BidController : ControllerBase
         _userRepository = userRepository;
         _bidService = bidService;
         _hubContext = hubContext;
+        _emailService = emailService;
         _logger = logger;
     }
 
@@ -183,6 +186,31 @@ public class BidController : ControllerBase
                         NewBid = request.Amount,
                         BidderName = userName
                     });
+
+                    // Send outbid email notification
+                    if (outbidUser != null && !string.IsNullOrEmpty(outbidUser.Email))
+                    {
+                        try
+                        {
+                            var suggestedBid = request.Amount + (auction.BidIncrement > 0 ? auction.BidIncrement : 10000);
+                            var auctionUrl = $"http://localhost:5173/auctions/{auction.Id}";
+                            
+                            await _emailService.SendOutbidNotificationEmailAsync(
+                                outbidUser.Email,
+                                outbidUser.FullName,
+                                auction.Title,
+                                FormatCurrency(outbidBid.Amount),
+                                FormatCurrency(request.Amount),
+                                FormatCurrency(suggestedBid),
+                                auctionUrl);
+                            
+                            _logger.LogInformation("Sent outbid email to {Email}", outbidUser.Email);
+                        }
+                        catch (Exception emailEx)
+                        {
+                            _logger.LogError(emailEx, "Failed to send outbid email to {Email}", outbidUser.Email);
+                        }
+                    }
                 }
             }
 
@@ -255,5 +283,10 @@ public class BidController : ControllerBase
             _logger.LogError(ex, "Error getting bid stats");
             return BadRequest(new { message = ex.Message });
         }
+    }
+
+    private static string FormatCurrency(decimal amount)
+    {
+        return string.Format(new System.Globalization.CultureInfo("vi-VN"), "{0:N0} ₫", amount);
     }
 }

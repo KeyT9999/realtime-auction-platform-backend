@@ -26,6 +26,7 @@ public class AuctionController : ControllerBase
     private readonly IBidService _bidService;
     private readonly ITransactionRepository _transactionRepository;
     private readonly IHubContext<AuctionHub> _hubContext;
+    private readonly IEmailService _emailService;
     private readonly ILogger<AuctionController> _logger;
 
     public AuctionController(
@@ -37,6 +38,7 @@ public class AuctionController : ControllerBase
         IBidService bidService,
         ITransactionRepository transactionRepository,
         IHubContext<AuctionHub> hubContext,
+        IEmailService emailService,
         ILogger<AuctionController> logger)
     {
         _auctionRepository = auctionRepository;
@@ -47,6 +49,7 @@ public class AuctionController : ControllerBase
         _bidService = bidService;
         _transactionRepository = transactionRepository;
         _hubContext = hubContext;
+        _emailService = emailService;
         _logger = logger;
     }
 
@@ -632,6 +635,30 @@ public class AuctionController : ControllerBase
                 Message = request?.Message
             });
 
+            // Send Bid Accepted email to winner
+            if (winner != null && !string.IsNullOrEmpty(winner.Email))
+            {
+                try
+                {
+                    var seller = await _userRepository.GetByIdAsync(userId);
+                    var transactionUrl = $"http://localhost:5173/auctions/{auction.Id}";
+                    
+                    await _emailService.SendBidAcceptedEmailAsync(
+                        winner.Email,
+                        winner.FullName,
+                        auction.Title,
+                        FormatCurrency(highestBid.Amount),
+                        seller?.FullName ?? "Người bán",
+                        transactionUrl);
+                    
+                    _logger.LogInformation("Sent bid accepted email to {Email}", winner.Email);
+                }
+                catch (Exception emailEx)
+                {
+                    _logger.LogError(emailEx, "Failed to send bid accepted email to {Email}", winner.Email);
+                }
+            }
+
             var response = await MapToResponseDto(auction);
             return Ok(response);
         }
@@ -747,6 +774,51 @@ public class AuctionController : ControllerBase
                 BuyerName = buyer?.FullName,
                 BuyoutPrice = auction.BuyoutPrice.Value
             });
+
+            // Send Buyout emails to both buyer and seller
+            var transactionUrl = $"http://localhost:5173/auctions/{auction.Id}";
+            
+            // Email to buyer
+            if (buyer != null && !string.IsNullOrEmpty(buyer.Email))
+            {
+                try
+                {
+                    await _emailService.SendBuyoutBuyerEmailAsync(
+                        buyer.Email,
+                        buyer.FullName,
+                        auction.Title,
+                        FormatCurrency(auction.BuyoutPrice.Value),
+                        transactionUrl);
+                    
+                    _logger.LogInformation("Sent buyout buyer email to {Email}", buyer.Email);
+                }
+                catch (Exception emailEx)
+                {
+                    _logger.LogError(emailEx, "Failed to send buyout buyer email to {Email}", buyer.Email);
+                }
+            }
+
+            // Email to seller
+            var seller = await _userRepository.GetByIdAsync(auction.SellerId);
+            if (seller != null && !string.IsNullOrEmpty(seller.Email))
+            {
+                try
+                {
+                    await _emailService.SendBuyoutSellerEmailAsync(
+                        seller.Email,
+                        seller.FullName,
+                        auction.Title,
+                        FormatCurrency(auction.BuyoutPrice.Value),
+                        buyer?.FullName ?? "Người mua",
+                        transactionUrl);
+                    
+                    _logger.LogInformation("Sent buyout seller email to {Email}", seller.Email);
+                }
+                catch (Exception emailEx)
+                {
+                    _logger.LogError(emailEx, "Failed to send buyout seller email to {Email}", seller.Email);
+                }
+            }
 
             var response = await MapToResponseDto(auction);
             return Ok(response);
@@ -904,5 +976,10 @@ public class AuctionController : ControllerBase
             _logger.LogError(ex, "Error cancelling transaction");
             return BadRequest(new { message = ex.Message });
         }
+    }
+
+    private static string FormatCurrency(decimal amount)
+    {
+        return string.Format(new System.Globalization.CultureInfo("vi-VN"), "{0:N0} ₫", amount);
     }
 }

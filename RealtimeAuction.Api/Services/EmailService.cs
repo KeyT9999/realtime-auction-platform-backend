@@ -222,4 +222,181 @@ public class EmailService : IEmailService
         
         await SendEmailAsync(toEmail, toName, "Welcome to Realtime Auction Platform", htmlContent);
     }
+
+    // ===== AUCTION EMAIL NOTIFICATIONS =====
+
+    public async Task SendAuctionEndingSoonEmailAsync(string toEmail, string toName, 
+        string auctionTitle, string timeRemaining, string currentPrice, string auctionUrl)
+    {
+        var templatePath = Path.Combine(Directory.GetCurrentDirectory(), "Templates", "AuctionEndingSoon.html");
+        var htmlContent = await File.ReadAllTextAsync(templatePath);
+        
+        htmlContent = htmlContent.Replace("{{UserName}}", toName);
+        htmlContent = htmlContent.Replace("{{AuctionTitle}}", auctionTitle);
+        htmlContent = htmlContent.Replace("{{TimeRemaining}}", timeRemaining);
+        htmlContent = htmlContent.Replace("{{CurrentPrice}}", currentPrice);
+        htmlContent = htmlContent.Replace("{{AuctionUrl}}", auctionUrl);
+        
+        await SendEmailAsync(toEmail, toName, $"⏰ Đấu giá sắp kết thúc: {auctionTitle}", htmlContent);
+    }
+
+    public async Task SendOutbidNotificationEmailAsync(string toEmail, string toName, 
+        string auctionTitle, string yourBid, string newBid, string suggestedBid, string auctionUrl)
+    {
+        var templatePath = Path.Combine(Directory.GetCurrentDirectory(), "Templates", "OutbidNotification.html");
+        var htmlContent = await File.ReadAllTextAsync(templatePath);
+        
+        htmlContent = htmlContent.Replace("{{UserName}}", toName);
+        htmlContent = htmlContent.Replace("{{AuctionTitle}}", auctionTitle);
+        htmlContent = htmlContent.Replace("{{YourBid}}", yourBid);
+        htmlContent = htmlContent.Replace("{{NewBid}}", newBid);
+        htmlContent = htmlContent.Replace("{{SuggestedBid}}", suggestedBid);
+        htmlContent = htmlContent.Replace("{{AuctionUrl}}", auctionUrl);
+        
+        await SendEmailAsync(toEmail, toName, $"⚡ Bạn đã bị vượt giá: {auctionTitle}", htmlContent);
+    }
+
+    public async Task SendAuctionWonEmailAsync(string toEmail, string toName, 
+        string auctionTitle, string winningBid, string transactionUrl)
+    {
+        var templatePath = Path.Combine(Directory.GetCurrentDirectory(), "Templates", "AuctionWon.html");
+        var htmlContent = await File.ReadAllTextAsync(templatePath);
+        
+        htmlContent = htmlContent.Replace("{{UserName}}", toName);
+        htmlContent = htmlContent.Replace("{{AuctionTitle}}", auctionTitle);
+        htmlContent = htmlContent.Replace("{{WinningBid}}", winningBid);
+        htmlContent = htmlContent.Replace("{{TransactionUrl}}", transactionUrl);
+        
+        await SendEmailAsync(toEmail, toName, $"🏆 Chúc mừng bạn thắng đấu giá: {auctionTitle}", htmlContent);
+    }
+
+    public async Task SendBuyoutBuyerEmailAsync(string toEmail, string toName, 
+        string auctionTitle, string buyoutPrice, string transactionUrl)
+    {
+        var templatePath = Path.Combine(Directory.GetCurrentDirectory(), "Templates", "BuyoutBuyer.html");
+        var htmlContent = await File.ReadAllTextAsync(templatePath);
+        
+        htmlContent = htmlContent.Replace("{{UserName}}", toName);
+        htmlContent = htmlContent.Replace("{{AuctionTitle}}", auctionTitle);
+        htmlContent = htmlContent.Replace("{{BuyoutPrice}}", buyoutPrice);
+        htmlContent = htmlContent.Replace("{{TransactionUrl}}", transactionUrl);
+        
+        await SendEmailAsync(toEmail, toName, $"⚡ Mua ngay thành công: {auctionTitle}", htmlContent);
+    }
+
+    public async Task SendBuyoutSellerEmailAsync(string toEmail, string toName, 
+        string auctionTitle, string buyoutPrice, string buyerName, string transactionUrl)
+    {
+        var templatePath = Path.Combine(Directory.GetCurrentDirectory(), "Templates", "BuyoutSeller.html");
+        var htmlContent = await File.ReadAllTextAsync(templatePath);
+        
+        htmlContent = htmlContent.Replace("{{UserName}}", toName);
+        htmlContent = htmlContent.Replace("{{AuctionTitle}}", auctionTitle);
+        htmlContent = htmlContent.Replace("{{BuyoutPrice}}", buyoutPrice);
+        htmlContent = htmlContent.Replace("{{BuyerName}}", buyerName);
+        htmlContent = htmlContent.Replace("{{TransactionUrl}}", transactionUrl);
+        
+        await SendEmailAsync(toEmail, toName, $"💰 Sản phẩm đã được mua ngay: {auctionTitle}", htmlContent);
+    }
+
+    public async Task SendBidAcceptedEmailAsync(string toEmail, string toName, 
+        string auctionTitle, string acceptedPrice, string sellerName, string transactionUrl)
+    {
+        var templatePath = Path.Combine(Directory.GetCurrentDirectory(), "Templates", "BidAccepted.html");
+        var htmlContent = await File.ReadAllTextAsync(templatePath);
+        
+        htmlContent = htmlContent.Replace("{{UserName}}", toName);
+        htmlContent = htmlContent.Replace("{{AuctionTitle}}", auctionTitle);
+        htmlContent = htmlContent.Replace("{{AcceptedPrice}}", acceptedPrice);
+        htmlContent = htmlContent.Replace("{{SellerName}}", sellerName);
+        htmlContent = htmlContent.Replace("{{TransactionUrl}}", transactionUrl);
+        
+        await SendEmailAsync(toEmail, toName, $"🤝 Giá của bạn đã được chấp nhận: {auctionTitle}", htmlContent);
+    }
+
+    public async Task SendTransactionCompletedEmailAsync(string toEmail, string toName, 
+        string role, string auctionTitle, string finalAmount, string transactionDate)
+    {
+        var templatePath = Path.Combine(Directory.GetCurrentDirectory(), "Templates", "TransactionCompleted.html");
+        var htmlContent = await File.ReadAllTextAsync(templatePath);
+        
+        htmlContent = htmlContent.Replace("{{UserName}}", toName);
+        htmlContent = htmlContent.Replace("{{Role}}", role);
+        htmlContent = htmlContent.Replace("{{AuctionTitle}}", auctionTitle);
+        htmlContent = htmlContent.Replace("{{FinalAmount}}", finalAmount);
+        htmlContent = htmlContent.Replace("{{TransactionDate}}", transactionDate);
+        
+        await SendEmailAsync(toEmail, toName, $"🎉 Giao dịch hoàn tất: {auctionTitle}", htmlContent);
+    }
+
+    public async Task SendTransactionReminderEmailAsync(string toEmail, string toName, 
+        string auctionTitle, string status, int daysRemaining, string transactionUrl, string warningMessage)
+    {
+        var templatePath = Path.Combine(Directory.GetCurrentDirectory(), "Templates", "TransactionReminder.html");
+        var htmlContent = await File.ReadAllTextAsync(templatePath);
+        
+        htmlContent = htmlContent.Replace("{{UserName}}", toName);
+        htmlContent = htmlContent.Replace("{{AuctionTitle}}", auctionTitle);
+        htmlContent = htmlContent.Replace("{{Status}}", status);
+        htmlContent = htmlContent.Replace("{{DaysRemaining}}", daysRemaining.ToString());
+        htmlContent = htmlContent.Replace("{{TransactionUrl}}", transactionUrl);
+        htmlContent = htmlContent.Replace("{{WarningMessage}}", warningMessage);
+        
+        await SendEmailAsync(toEmail, toName, $"⏰ Nhắc nhở xác nhận giao dịch: {auctionTitle}", htmlContent);
+    }
+
+    // ===== ORDER EMAIL NOTIFICATIONS =====
+
+    public async Task SendOrderShippedEmailAsync(string toEmail, string toName, 
+        string productTitle, string? trackingNumber, string? shippingCarrier)
+    {
+        var trackingInfo = "";
+        if (!string.IsNullOrWhiteSpace(trackingNumber))
+        {
+            trackingInfo = $"<p><strong>Mã vận đơn:</strong> {trackingNumber}</p>";
+            if (!string.IsNullOrWhiteSpace(shippingCarrier))
+            {
+                trackingInfo += $"<p><strong>Đơn vị vận chuyển:</strong> {shippingCarrier}</p>";
+            }
+        }
+
+        var htmlContent = $@"
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <style>
+                body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
+                .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
+                .header {{ background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; text-align: center; border-radius: 8px 8px 0 0; }}
+                .content {{ background: #f9f9f9; padding: 30px; border-radius: 0 0 8px 8px; }}
+                .product {{ background: white; padding: 15px; border-radius: 8px; margin: 15px 0; }}
+                .emoji {{ font-size: 48px; margin-bottom: 10px; }}
+            </style>
+        </head>
+        <body>
+            <div class='container'>
+                <div class='header'>
+                    <div class='emoji'>📦</div>
+                    <h1>Đơn hàng đã được gửi đi!</h1>
+                </div>
+                <div class='content'>
+                    <p>Xin chào <strong>{toName}</strong>,</p>
+                    <p>Người bán đã gửi đơn hàng của bạn. Vui lòng theo dõi tình trạng giao hàng.</p>
+                    
+                    <div class='product'>
+                        <p><strong>Sản phẩm:</strong> {productTitle}</p>
+                        {trackingInfo}
+                    </div>
+                    
+                    <p>Sau khi nhận được hàng, vui lòng xác nhận trong mục <strong>Đơn hàng của tôi</strong> để hoàn tất giao dịch.</p>
+                    
+                    <p>Trân trọng,<br>Realtime Auction Platform</p>
+                </div>
+            </div>
+        </body>
+        </html>";
+
+        await SendEmailAsync(toEmail, toName, $"📦 Đơn hàng đã được gửi: {productTitle}", htmlContent);
+    }
 }
+

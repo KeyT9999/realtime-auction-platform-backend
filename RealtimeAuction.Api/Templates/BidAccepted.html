@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="vi">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Giá của bạn đã được chấp nhận</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .container {
+            background-color: #f9f9f9;
+            padding: 30px;
+            border-radius: 10px;
+            border: 1px solid #ddd;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .header h1 {
+            color: #0891b2;
+            margin: 0;
+        }
+
+        .content {
+            background-color: white;
+            padding: 25px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+
+        .button {
+            display: inline-block;
+            padding: 14px 32px;
+            background-color: #0891b2;
+            color: white;
+            text-decoration: none;
+            border-radius: 5px;
+            margin: 20px 0;
+            font-weight: bold;
+        }
+
+        .button:hover {
+            background-color: #0e7490;
+        }
+
+        .footer {
+            text-align: center;
+            color: #666;
+            font-size: 12px;
+            margin-top: 20px;
+        }
+
+        .highlight-box {
+            background-color: #ecfeff;
+            border-left: 4px solid #0891b2;
+            padding: 15px 20px;
+            margin: 20px 0;
+            border-radius: 0 5px 5px 0;
+        }
+
+        .price-display {
+            text-align: center;
+            font-size: 32px;
+            font-weight: bold;
+            color: #0891b2;
+            margin: 20px 0;
+        }
+
+        .success-icon {
+            font-size: 60px;
+            text-align: center;
+            margin: 10px 0;
+        }
+
+        .info-box {
+            background-color: #f8fafc;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 20px 0;
+        }
+
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid #eee;
+        }
+
+        .info-row:last-child {
+            border-bottom: none;
+        }
+
+        .next-steps {
+            background-color: #eff6ff;
+            padding: 20px;
+            border-radius: 5px;
+            margin: 20px 0;
+        }
+
+        .next-steps h3 {
+            margin-top: 0;
+            color: #1d4ed8;
+        }
+
+        .next-steps ol {
+            margin: 0;
+            padding-left: 20px;
+        }
+
+        .next-steps li {
+            padding: 5px 0;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="success-icon">🤝</div>
+            <h1>Giá của bạn đã được chấp nhận!</h1>
+        </div>
+        <div class="content">
+            <p>Xin chào <strong>{{UserName}}</strong>,</p>
+            <p>Tin tuyệt vời! Người bán đã chấp nhận mức giá bạn đặt trong phiên đấu giá:</p>
+
+            <div class="highlight-box">
+                <strong>{{AuctionTitle}}</strong>
+            </div>
+
+            <div class="price-display">
+                ✅ {{AcceptedPrice}}
+            </div>
+
+            <div class="info-box">
+                <div class="info-row">
+                    <span>Người bán:</span>
+                    <strong>{{SellerName}}</strong>
+                </div>
+            </div>
+
+            <div class="next-steps">
+                <h3>📋 Các bước tiếp theo:</h3>
+                <ol>
+                    <li>Xác nhận thông tin giao dịch</li>
+                    <li>Kiểm tra địa chỉ giao hàng</li>
+                    <li>Chờ người bán giao hàng</li>
+                    <li>Xác nhận đã nhận hàng để hoàn tất</li>
+                </ol>
+            </div>
+
+            <div style="text-align: center;">
+                <a href="{{TransactionUrl}}" class="button">✅ Xác nhận giao dịch</a>
+            </div>
+
+            <p style="color: #666; font-size: 14px; text-align: center;">
+                Vui lòng hoàn tất giao dịch trong vòng 7 ngày.
+            </p>
+        </div>
+        <div class="footer">
+            <p>Cảm ơn bạn đã sử dụng Realtime Auction Platform!</p>
+            <p>&copy; 2024 Realtime Auction Platform. All rights reserved.</p>
+        </div>
+    </div>
+</body>
+
+</html>

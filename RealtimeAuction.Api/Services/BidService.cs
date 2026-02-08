@@ -11,6 +11,7 @@ public class BidService : IBidService
     private readonly IAuctionRepository _auctionRepository;
     private readonly IUserRepository _userRepository;
     private readonly ITransactionRepository _transactionRepository;
+    private readonly IEmailService _emailService;
     private readonly ILogger<BidService> _logger;
 
     public BidService(
@@ -18,12 +19,14 @@ public class BidService : IBidService
         IAuctionRepository auctionRepository,
         IUserRepository userRepository,
         ITransactionRepository transactionRepository,
+        IEmailService emailService,
         ILogger<BidService> logger)
     {
         _bidRepository = bidRepository;
         _auctionRepository = auctionRepository;
         _userRepository = userRepository;
         _transactionRepository = transactionRepository;
+        _emailService = emailService;
         _logger = logger;
     }
 
@@ -446,12 +449,65 @@ public class BidService : IBidService
             pendingTransaction.Status = TransactionStatus.Completed;
             await _transactionRepository.UpdateAsync(pendingTransaction);
 
+            // Send Transaction Completed emails to both parties
+            var buyer = await _userRepository.GetByIdAsync(auction.WinnerId!);
+            var seller = await _userRepository.GetByIdAsync(auction.SellerId);
+            var transactionDate = DateTime.UtcNow.ToString("dd/MM/yyyy HH:mm");
+            var finalAmount = FormatCurrency(Math.Abs(pendingTransaction.Amount));
+
+            // Email to buyer
+            if (buyer != null && !string.IsNullOrEmpty(buyer.Email))
+            {
+                try
+                {
+                    await _emailService.SendTransactionCompletedEmailAsync(
+                        buyer.Email,
+                        buyer.FullName,
+                        "Người mua",
+                        auction.Title,
+                        finalAmount,
+                        transactionDate);
+                    
+                    _logger.LogInformation("Sent transaction completed email to buyer {Email}", buyer.Email);
+                }
+                catch (Exception emailEx)
+                {
+                    _logger.LogError(emailEx, "Failed to send transaction completed email to buyer {Email}", buyer.Email);
+                }
+            }
+
+            // Email to seller
+            if (seller != null && !string.IsNullOrEmpty(seller.Email))
+            {
+                try
+                {
+                    await _emailService.SendTransactionCompletedEmailAsync(
+                        seller.Email,
+                        seller.FullName,
+                        "Người bán",
+                        auction.Title,
+                        finalAmount,
+                        transactionDate);
+                    
+                    _logger.LogInformation("Sent transaction completed email to seller {Email}", seller.Email);
+                }
+                catch (Exception emailEx)
+                {
+                    _logger.LogError(emailEx, "Failed to send transaction completed email to seller {Email}", seller.Email);
+                }
+            }
+
             _logger.LogInformation(
                 "Transaction confirmed and completed for auction {AuctionId}",
                 auctionId);
         }
 
         return true;
+    }
+
+    private static string FormatCurrency(decimal amount)
+    {
+        return string.Format(new System.Globalization.CultureInfo("vi-VN"), "{0:N0} ₫", amount);
     }
 
     public async Task<bool> CancelTransactionAsync(string auctionId, string userId)

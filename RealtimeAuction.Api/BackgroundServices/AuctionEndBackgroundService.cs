@@ -158,6 +158,18 @@ public class AuctionEndBackgroundService : BackgroundService
             await transactionRepository.CreateAsync(pendingTransaction);
         }
 
+        // 5b. Tạo Order cho giao dịch
+        var orderService = scope.ServiceProvider.GetRequiredService<IOrderService>();
+        var productImage = auctionToComplete?.Images?.FirstOrDefault();
+        await orderService.CreateOrderFromAuctionAsync(
+            auctionId,
+            highestBid.UserId,
+            sellerId,
+            highestBid.Amount,
+            auctionToComplete?.Title ?? "Đấu giá",
+            productImage
+        );
+
         // 6. Notify winner và seller
         await AuctionHub.NotifyAuctionEnded(hubContext, auctionId, new
         {
@@ -176,8 +188,37 @@ public class AuctionEndBackgroundService : BackgroundService
             Message = "Chúc mừng! Bạn đã thắng đấu giá"
         });
 
+        // 7. Send Auction Won email to winner
+        if (winner != null && !string.IsNullOrEmpty(winner.Email))
+        {
+            try
+            {
+                var emailService = scope.ServiceProvider.GetRequiredService<IEmailService>();
+                var transactionUrl = $"http://localhost:5173/auctions/{auctionId}";
+                var winningBidStr = FormatCurrency(highestBid.Amount);
+                
+                await emailService.SendAuctionWonEmailAsync(
+                    winner.Email,
+                    winner.FullName,
+                    auctionToComplete?.Title ?? "Đấu giá",
+                    winningBidStr,
+                    transactionUrl);
+                
+                _logger.LogInformation("Sent auction won email to {Email}", winner.Email);
+            }
+            catch (Exception emailEx)
+            {
+                _logger.LogError(emailEx, "Failed to send auction won email to {Email}", winner.Email);
+            }
+        }
+
         _logger.LogInformation(
             "Auction {AuctionId} completed. Winner: {WinnerId}, Price: {Price}",
             auctionId, highestBid.UserId, highestBid.Amount);
+    }
+
+    private static string FormatCurrency(decimal amount)
+    {
+        return string.Format(new System.Globalization.CultureInfo("vi-VN"), "{0:N0} ₫", amount);
     }
 }

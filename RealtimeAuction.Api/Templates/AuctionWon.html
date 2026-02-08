@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="vi">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chúc mừng bạn đã thắng đấu giá!</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .container {
+            background-color: #f9f9f9;
+            padding: 30px;
+            border-radius: 10px;
+            border: 1px solid #ddd;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .header h1 {
+            color: #16a34a;
+            margin: 0;
+            font-size: 28px;
+        }
+
+        .trophy {
+            font-size: 60px;
+            text-align: center;
+            margin: 10px 0;
+        }
+
+        .content {
+            background-color: white;
+            padding: 25px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+
+        .button {
+            display: inline-block;
+            padding: 14px 32px;
+            background-color: #16a34a;
+            color: white;
+            text-decoration: none;
+            border-radius: 5px;
+            margin: 20px 0;
+            font-weight: bold;
+        }
+
+        .button:hover {
+            background-color: #15803d;
+        }
+
+        .footer {
+            text-align: center;
+            color: #666;
+            font-size: 12px;
+            margin-top: 20px;
+        }
+
+        .highlight-box {
+            background-color: #f0fdf4;
+            border-left: 4px solid #16a34a;
+            padding: 15px 20px;
+            margin: 20px 0;
+            border-radius: 0 5px 5px 0;
+        }
+
+        .winning-price {
+            text-align: center;
+            font-size: 32px;
+            font-weight: bold;
+            color: #16a34a;
+            margin: 20px 0;
+        }
+
+        .next-steps {
+            background-color: #eff6ff;
+            padding: 20px;
+            border-radius: 5px;
+            margin: 20px 0;
+        }
+
+        .next-steps h3 {
+            margin-top: 0;
+            color: #1d4ed8;
+        }
+
+        .next-steps ol {
+            margin: 0;
+            padding-left: 20px;
+        }
+
+        .next-steps li {
+            padding: 5px 0;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="trophy">🏆</div>
+            <h1>Chúc mừng! Bạn đã thắng!</h1>
+        </div>
+        <div class="content">
+            <p>Xin chào <strong>{{UserName}}</strong>,</p>
+            <p>Chúc mừng bạn đã chiến thắng trong phiên đấu giá:</p>
+
+            <div class="highlight-box">
+                <strong>{{AuctionTitle}}</strong>
+            </div>
+
+            <div class="winning-price">
+                💰 {{WinningBid}}
+            </div>
+
+            <div class="next-steps">
+                <h3>📋 Các bước tiếp theo:</h3>
+                <ol>
+                    <li>Xác nhận thông tin giao dịch</li>
+                    <li>Kiểm tra địa chỉ giao hàng</li>
+                    <li>Chờ người bán xác nhận và giao hàng</li>
+                    <li>Xác nhận đã nhận hàng để hoàn tất</li>
+                </ol>
+            </div>
+
+            <div style="text-align: center;">
+                <a href="{{TransactionUrl}}" class="button">✅ Xác nhận giao dịch</a>
+            </div>
+
+            <p style="color: #666; font-size: 14px; text-align: center;">
+                Vui lòng hoàn tất giao dịch trong vòng 7 ngày để đảm bảo quyền lợi của bạn.
+            </p>
+        </div>
+        <div class="footer">
+            <p>Cảm ơn bạn đã sử dụng Realtime Auction Platform!</p>
+            <p>&copy; 2024 Realtime Auction Platform. All rights reserved.</p>
+        </div>
+    </div>
+</body>
+
+</html>

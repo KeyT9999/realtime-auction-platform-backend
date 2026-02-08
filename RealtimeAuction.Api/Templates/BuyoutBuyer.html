@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="vi">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mua ngay thành công</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .container {
+            background-color: #f9f9f9;
+            padding: 30px;
+            border-radius: 10px;
+            border: 1px solid #ddd;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .header h1 {
+            color: #7c3aed;
+            margin: 0;
+        }
+
+        .content {
+            background-color: white;
+            padding: 25px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+
+        .button {
+            display: inline-block;
+            padding: 14px 32px;
+            background-color: #7c3aed;
+            color: white;
+            text-decoration: none;
+            border-radius: 5px;
+            margin: 20px 0;
+            font-weight: bold;
+        }
+
+        .button:hover {
+            background-color: #6d28d9;
+        }
+
+        .footer {
+            text-align: center;
+            color: #666;
+            font-size: 12px;
+            margin-top: 20px;
+        }
+
+        .highlight-box {
+            background-color: #f5f3ff;
+            border-left: 4px solid #7c3aed;
+            padding: 15px 20px;
+            margin: 20px 0;
+            border-radius: 0 5px 5px 0;
+        }
+
+        .price-display {
+            text-align: center;
+            font-size: 32px;
+            font-weight: bold;
+            color: #7c3aed;
+            margin: 20px 0;
+        }
+
+        .success-icon {
+            font-size: 60px;
+            text-align: center;
+            margin: 10px 0;
+        }
+
+        .next-steps {
+            background-color: #eff6ff;
+            padding: 20px;
+            border-radius: 5px;
+            margin: 20px 0;
+        }
+
+        .next-steps h3 {
+            margin-top: 0;
+            color: #1d4ed8;
+        }
+
+        .next-steps ol {
+            margin: 0;
+            padding-left: 20px;
+        }
+
+        .next-steps li {
+            padding: 5px 0;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="success-icon">⚡</div>
+            <h1>Mua ngay thành công!</h1>
+        </div>
+        <div class="content">
+            <p>Xin chào <strong>{{UserName}}</strong>,</p>
+            <p>Bạn đã mua thành công sản phẩm với tính năng <strong>Mua ngay</strong>:</p>
+
+            <div class="highlight-box">
+                <strong>{{AuctionTitle}}</strong>
+            </div>
+
+            <div class="price-display">
+                💳 {{BuyoutPrice}}
+            </div>
+
+            <div class="next-steps">
+                <h3>📋 Các bước tiếp theo:</h3>
+                <ol>
+                    <li>Xác nhận thông tin giao hàng</li>
+                    <li>Chờ người bán chuẩn bị hàng</li>
+                    <li>Theo dõi trạng thái giao hàng</li>
+                    <li>Xác nhận đã nhận hàng để hoàn tất</li>
+                </ol>
+            </div>
+
+            <div style="text-align: center;">
+                <a href="{{TransactionUrl}}" class="button">✅ Xác nhận giao dịch</a>
+            </div>
+        </div>
+        <div class="footer">
+            <p>Cảm ơn bạn đã tin tưởng sử dụng dịch vụ của chúng tôi!</p>
+            <p>&copy; 2024 Realtime Auction Platform. All rights reserved.</p>
+        </div>
+    </div>
+</body>
+
+</html>
