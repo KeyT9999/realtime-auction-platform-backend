@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Đấu giá sắp kết thúc</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .container {
+            background-color: #f9f9f9;
+            padding: 30px;
+            border-radius: 10px;
+            border: 1px solid #ddd;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .header h1 {
+            color: #dc2626;
+            margin: 0;
+        }
+        .content {
+            background-color: white;
+            padding: 25px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+        .button {
+            display: inline-block;
+            padding: 14px 32px;
+            background-color: #dc2626;
+            color: white;
+            text-decoration: none;
+            border-radius: 5px;
+            margin: 20px 0;
+            font-weight: bold;
+        }
+        .button:hover {
+            background-color: #b91c1c;
+        }
+        .footer {
+            text-align: center;
+            color: #666;
+            font-size: 12px;
+            margin-top: 20px;
+        }
+        .highlight-box {
+            background-color: #fef2f2;
+            border-left: 4px solid #dc2626;
+            padding: 15px 20px;
+            margin: 20px 0;
+            border-radius: 0 5px 5px 0;
+        }
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px 0;
+            border-bottom: 1px solid #eee;
+        }
+        .info-label {
+            color: #666;
+        }
+        .info-value {
+            font-weight: bold;
+            color: #333;
+        }
+        .timer {
+            text-align: center;
+            font-size: 28px;
+            font-weight: bold;
+            color: #dc2626;
+            margin: 20px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>⏰ Đấu giá sắp kết thúc!</h1>
+        </div>
+        <div class="content">
+            <p>Xin chào <strong>{{UserName}}</strong>,</p>
+            <p>Phiên đấu giá mà bạn đang theo dõi sắp kết thúc!</p>
+            
+            <div class="highlight-box">
+                <strong>{{AuctionTitle}}</strong>
+            </div>
+
+            <div class="timer">
+                ⏱️ Còn lại: {{TimeRemaining}}
+            </div>
+
+            <div style="background: #f8fafc; padding: 15px; border-radius: 5px;">
+                <div class="info-row">
+                    <span class="info-label">Giá hiện tại:</span>
+                    <span class="info-value" style="color: #16a34a;">{{CurrentPrice}}</span>
+                </div>
+            </div>
+
+            <p style="margin-top: 20px;">Đừng bỏ lỡ cơ hội! Hãy quay lại đấu giá ngay để đặt giá của bạn.</p>
+            
+            <div style="text-align: center;">
+                <a href="{{AuctionUrl}}" class="button">🔥 Đặt giá ngay</a>
+            </div>
+        </div>
+        <div class="footer">
+            <p>Email này được gửi vì bạn đang theo dõi phiên đấu giá này.</p>
+            <p>&copy; 2024 Realtime Auction Platform. All rights reserved.</p>
+        </div>
+    </div>
+</body>
+</html>

@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="vi">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nhắc nhở xác nhận giao dịch</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .container {
+            background-color: #f9f9f9;
+            padding: 30px;
+            border-radius: 10px;
+            border: 1px solid #ddd;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .header h1 {
+            color: #d97706;
+            margin: 0;
+        }
+
+        .content {
+            background-color: white;
+            padding: 25px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+
+        .button {
+            display: inline-block;
+            padding: 14px 32px;
+            background-color: #d97706;
+            color: white;
+            text-decoration: none;
+            border-radius: 5px;
+            margin: 20px 0;
+            font-weight: bold;
+        }
+
+        .button:hover {
+            background-color: #b45309;
+        }
+
+        .footer {
+            text-align: center;
+            color: #666;
+            font-size: 12px;
+            margin-top: 20px;
+        }
+
+        .highlight-box {
+            background-color: #fffbeb;
+            border-left: 4px solid #d97706;
+            padding: 15px 20px;
+            margin: 20px 0;
+            border-radius: 0 5px 5px 0;
+        }
+
+        .reminder-icon {
+            font-size: 60px;
+            text-align: center;
+            margin: 10px 0;
+        }
+
+        .info-box {
+            background-color: #f8fafc;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 20px 0;
+        }
+
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px 0;
+            border-bottom: 1px solid #eee;
+        }
+
+        .info-row:last-child {
+            border-bottom: none;
+        }
+
+        .warning-box {
+            background-color: #fef2f2;
+            border: 1px solid #fecaca;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 20px 0;
+            color: #dc2626;
+        }
+
+        .days-remaining {
+            text-align: center;
+            font-size: 48px;
+            font-weight: bold;
+            color: #d97706;
+            margin: 20px 0;
+        }
+
+        .days-label {
+            text-align: center;
+            color: #666;
+            margin-top: -10px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="reminder-icon">⏰</div>
+            <h1>Nhắc nhở xác nhận giao dịch</h1>
+        </div>
+        <div class="content">
+            <p>Xin chào <strong>{{UserName}}</strong>,</p>
+            <p>Bạn có một giao dịch đang chờ xác nhận:</p>
+
+            <div class="highlight-box">
+                <strong>{{AuctionTitle}}</strong>
+            </div>
+
+            <div class="days-remaining">
+                {{DaysRemaining}}
+            </div>
+            <p class="days-label">ngày còn lại để xác nhận</p>
+
+            <div class="info-box">
+                <div class="info-row">
+                    <span>Trạng thái:</span>
+                    <strong style="color: #d97706;">{{Status}}</strong>
+                </div>
+            </div>
+
+            <div class="warning-box">
+                ⚠️ {{WarningMessage}}
+            </div>
+
+            <div style="text-align: center;">
+                <a href="{{TransactionUrl}}" class="button">✅ Xác nhận ngay</a>
+            </div>
+
+            <p style="color: #666; font-size: 14px; text-align: center;">
+                Nếu bạn gặp vấn đề với giao dịch, vui lòng liên hệ bộ phận hỗ trợ.
+            </p>
+        </div>
+        <div class="footer">
+            <p>Email này được gửi tự động từ hệ thống.</p>
+            <p>&copy; 2024 Realtime Auction Platform. All rights reserved.</p>
+        </div>
+    </div>
+</body>
+
+</html>

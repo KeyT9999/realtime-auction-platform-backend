@@ -17,5 +17,7 @@ public class Watchlist
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
-    // Note: No unique constraint - allows duplicates if needed
+    // Email notification tracking
+    public bool EndingSoonEmailSent { get; set; } = false;
+    public DateTime? EndingSoonEmailSentAt { get; set; }
 }

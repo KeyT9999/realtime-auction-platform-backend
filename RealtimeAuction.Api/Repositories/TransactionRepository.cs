@@ -29,6 +29,14 @@ public class TransactionRepository : ITransactionRepository
         return transaction;
     }
 
+    public async Task<List<Transaction>> GetAllAsync()
+    {
+        return await _transactions
+            .Find(_ => true)
+            .SortByDescending(t => t.CreatedAt)
+            .ToListAsync();
+    }
+
     public async Task<List<Transaction>> GetByUserIdAsync(string userId)
     {
         return await _transactions

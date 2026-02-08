@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="vi">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Giao dịch hoàn tất</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .container {
+            background-color: #f9f9f9;
+            padding: 30px;
+            border-radius: 10px;
+            border: 1px solid #ddd;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .header h1 {
+            color: #16a34a;
+            margin: 0;
+        }
+
+        .content {
+            background-color: white;
+            padding: 25px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+
+        .button {
+            display: inline-block;
+            padding: 14px 32px;
+            background-color: #4f46e5;
+            color: white;
+            text-decoration: none;
+            border-radius: 5px;
+            margin: 10px 5px;
+            font-weight: bold;
+        }
+
+        .button:hover {
+            background-color: #4338ca;
+        }
+
+        .footer {
+            text-align: center;
+            color: #666;
+            font-size: 12px;
+            margin-top: 20px;
+        }
+
+        .highlight-box {
+            background-color: #f0fdf4;
+            border-left: 4px solid #16a34a;
+            padding: 15px 20px;
+            margin: 20px 0;
+            border-radius: 0 5px 5px 0;
+        }
+
+        .success-icon {
+            font-size: 60px;
+            text-align: center;
+            margin: 10px 0;
+        }
+
+        .info-box {
+            background-color: #f8fafc;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 20px 0;
+        }
+
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px 0;
+            border-bottom: 1px solid #eee;
+        }
+
+        .info-row:last-child {
+            border-bottom: none;
+        }
+
+        .info-label {
+            color: #666;
+        }
+
+        .info-value {
+            font-weight: bold;
+        }
+
+        .thank-you {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 5px;
+            text-align: center;
+            margin: 20px 0;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="success-icon">🎉</div>
+            <h1>Giao dịch hoàn tất!</h1>
+        </div>
+        <div class="content">
+            <p>Xin chào <strong>{{UserName}}</strong>,</p>
+            <p>Giao dịch của bạn đã được hoàn tất thành công!</p>
+
+            <div class="highlight-box">
+                <strong>{{AuctionTitle}}</strong>
+            </div>
+
+            <div class="info-box">
+                <div class="info-row">
+                    <span class="info-label">Vai trò của bạn:</span>
+                    <span class="info-value">{{Role}}</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Số tiền:</span>
+                    <span class="info-value" style="color: #16a34a;">{{FinalAmount}}</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Ngày hoàn tất:</span>
+                    <span class="info-value">{{TransactionDate}}</span>
+                </div>
+            </div>
+
+            <div class="thank-you">
+                <h3 style="margin-top: 0;">Cảm ơn bạn! 💝</h3>
+                <p style="margin-bottom: 0;">Chúng tôi rất vui vì bạn đã tin tưởng sử dụng dịch vụ.</p>
+            </div>
+
+            <div style="text-align: center;">
+                <a href="http://localhost:5173/marketplace" class="button">🛍️ Tiếp tục mua sắm</a>
+            </div>
+        </div>
+        <div class="footer">
+            <p>Mọi thắc mắc xin liên hệ bộ phận hỗ trợ khách hàng.</p>
+            <p>&copy; 2024 Realtime Auction Platform. All rights reserved.</p>
+        </div>
+    </div>
+</body>
+
+</html>

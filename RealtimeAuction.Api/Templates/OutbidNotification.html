@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="vi">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bạn đã bị vượt giá</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .container {
+            background-color: #f9f9f9;
+            padding: 30px;
+            border-radius: 10px;
+            border: 1px solid #ddd;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .header h1 {
+            color: #ea580c;
+            margin: 0;
+        }
+
+        .content {
+            background-color: white;
+            padding: 25px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+
+        .button {
+            display: inline-block;
+            padding: 14px 32px;
+            background-color: #ea580c;
+            color: white;
+            text-decoration: none;
+            border-radius: 5px;
+            margin: 20px 0;
+            font-weight: bold;
+        }
+
+        .button:hover {
+            background-color: #c2410c;
+        }
+
+        .footer {
+            text-align: center;
+            color: #666;
+            font-size: 12px;
+            margin-top: 20px;
+        }
+
+        .highlight-box {
+            background-color: #fff7ed;
+            border-left: 4px solid #ea580c;
+            padding: 15px 20px;
+            margin: 20px 0;
+            border-radius: 0 5px 5px 0;
+        }
+
+        .price-comparison {
+            display: flex;
+            justify-content: space-around;
+            margin: 20px 0;
+            text-align: center;
+        }
+
+        .price-box {
+            padding: 15px 20px;
+            border-radius: 8px;
+            flex: 1;
+            margin: 0 5px;
+        }
+
+        .your-bid {
+            background-color: #fef2f2;
+            border: 1px solid #fecaca;
+        }
+
+        .new-bid {
+            background-color: #fef3c7;
+            border: 1px solid #fcd34d;
+        }
+
+        .suggested-bid {
+            background-color: #dcfce7;
+            border: 1px solid #86efac;
+        }
+
+        .price-label {
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 5px;
+        }
+
+        .price-value {
+            font-size: 18px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>⚡ Bạn đã bị vượt giá!</h1>
+        </div>
+        <div class="content">
+            <p>Xin chào <strong>{{UserName}}</strong>,</p>
+            <p>Có người vừa đặt giá cao hơn bạn trong phiên đấu giá:</p>
+
+            <div class="highlight-box">
+                <strong>{{AuctionTitle}}</strong>
+            </div>
+
+            <div class="price-comparison">
+                <div class="price-box your-bid">
+                    <div class="price-label">Giá của bạn</div>
+                    <div class="price-value" style="color: #dc2626;">{{YourBid}}</div>
+                </div>
+                <div class="price-box new-bid">
+                    <div class="price-label">Giá mới</div>
+                    <div class="price-value" style="color: #d97706;">{{NewBid}}</div>
+                </div>
+                <div class="price-box suggested-bid">
+                    <div class="price-label">Gợi ý tối thiểu</div>
+                    <div class="price-value" style="color: #16a34a;">{{SuggestedBid}}</div>
+                </div>
+            </div>
+
+            <p>Đừng để vuột mất món hàng bạn yêu thích! Hãy quay lại đặt giá cao hơn ngay.</p>
+
+            <div style="text-align: center;">
+                <a href="{{AuctionUrl}}" class="button">💪 Đặt giá lại</a>
+            </div>
+        </div>
+        <div class="footer">
+            <p>Email này được gửi vì bạn đã tham gia đấu giá phiên này.</p>
+            <p>&copy; 2024 Realtime Auction Platform. All rights reserved.</p>
+        </div>
+    </div>
+</body>
+
+</html>
