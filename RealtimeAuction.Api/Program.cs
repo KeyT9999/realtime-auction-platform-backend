@@ -284,6 +284,8 @@ builder.Services.AddScoped<IShippingInfoRepository, ShippingInfoRepository>();
 builder.Services.AddScoped<ITransactionRepository, TransactionRepository>();
 builder.Services.AddScoped<IOrderRepository, OrderRepository>();
 builder.Services.AddScoped<IReviewRepository, ReviewRepository>();
+builder.Services.AddScoped<IWithdrawalRepository, WithdrawalRepository>();
+builder.Services.AddScoped<IBankAccountRepository, BankAccountRepository>();
 
 // Register Services
 builder.Services.AddScoped<IAuthService, AuthService>();
@@ -296,6 +298,7 @@ builder.Services.AddScoped<IPaymentService, PaymentService>();
 builder.Services.AddScoped<IBidService, BidService>();
 builder.Services.AddScoped<IOrderService, OrderService>();
 builder.Services.AddScoped<IReviewService, ReviewService>();
+builder.Services.AddScoped<IWithdrawalService, WithdrawalService>();
 
 // Configure PayOS
 builder.Services.Configure<PayOsSettings>(options =>
@@ -344,6 +347,7 @@ builder.Services.AddControllers();
 builder.Services.AddHostedService<RealtimeAuction.Api.BackgroundServices.AuctionEndBackgroundService>();
 builder.Services.AddHostedService<RealtimeAuction.Api.BackgroundServices.AuctionEndingSoonNotificationService>();
 builder.Services.AddHostedService<RealtimeAuction.Api.BackgroundServices.TransactionReminderService>();
+builder.Services.AddHostedService<RealtimeAuction.Api.BackgroundServices.WithdrawalReminderService>();
 
 // Add SignalR
 builder.Services.AddSignalR();

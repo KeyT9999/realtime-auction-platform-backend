@@ -35,7 +35,10 @@ namespace RealtimeAuction.Api.Models
         public decimal AvailableBalance { get; set; } = 0;
 
         [BsonRepresentation(BsonType.Decimal128)]
-        public decimal EscrowBalance { get; set; } = 0;
+        public decimal EscrowBalance { get; set; } = 0; // Tiền đang hold cho auction (bid, payment)
+
+        [BsonRepresentation(BsonType.Decimal128)]
+        public decimal HeldBalance { get; set; } = 0; // Tiền đang hold cho withdrawal request
 
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 

@@ -37,4 +37,14 @@ public interface IEmailService
     // Order Email Notifications
     Task SendOrderShippedEmailAsync(string toEmail, string toName, 
         string productTitle, string? trackingNumber, string? shippingCarrier);
+    
+    // Withdrawal Email Notifications
+    Task SendWithdrawalOtpEmailAsync(string toEmail, string toName, string otpCode);
+    Task SendWithdrawalApprovedEmailAsync(string toEmail, string toName, decimal amount, string bankInfo);
+    Task SendWithdrawalRejectedEmailAsync(string toEmail, string toName, decimal amount, string reason);
+    Task SendWithdrawalCompletedEmailAsync(string toEmail, string toName, 
+        decimal amount, decimal fee, decimal finalAmount, string transactionCode, string bankInfo);
+    Task SendWithdrawalReminderToAdminAsync(string toEmail, string toName,
+        string withdrawalId, string userName, string userEmail, decimal amount, decimal finalAmount,
+        string bankName, string accountLast4, int hoursSinceApproved, string message);
 }

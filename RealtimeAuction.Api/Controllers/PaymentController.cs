@@ -160,8 +160,9 @@ public class PaymentController : ControllerBase
             return Ok(new 
             { 
                 availableBalance = user.AvailableBalance,
-                escrowBalance = user.EscrowBalance,
-                totalBalance = user.AvailableBalance + user.EscrowBalance
+                escrowBalance = user.EscrowBalance,  // Cho auction
+                heldBalance = user.HeldBalance,      // Cho withdrawal
+                totalBalance = user.AvailableBalance + user.EscrowBalance + user.HeldBalance
             });
         }
         catch (Exception ex)
