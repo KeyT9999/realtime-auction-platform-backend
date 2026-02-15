@@ -398,5 +398,230 @@ public class EmailService : IEmailService
 
         await SendEmailAsync(toEmail, toName, $"📦 Đơn hàng đã được gửi: {productTitle}", htmlContent);
     }
+
+    // ===== WITHDRAWAL EMAIL NOTIFICATIONS =====
+
+    public async Task SendWithdrawalOtpEmailAsync(string toEmail, string toName, string otpCode)
+    {
+        var htmlContent = $@"
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <style>
+                body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
+                .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
+                .header {{ background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); color: white; padding: 20px; text-align: center; border-radius: 8px 8px 0 0; }}
+                .content {{ background: #f9f9f9; padding: 30px; border-radius: 0 0 8px 8px; }}
+                .otp-code {{ font-size: 32px; font-weight: bold; color: #f5576c; text-align: center; padding: 20px; background: white; border-radius: 8px; letter-spacing: 8px; margin: 20px 0; }}
+                .warning {{ color: #e74c3c; font-size: 14px; }}
+            </style>
+        </head>
+        <body>
+            <div class='container'>
+                <div class='header'>
+                    <h1>Xac nhan rut tien</h1>
+                </div>
+                <div class='content'>
+                    <p>Xin chao <strong>{toName}</strong>,</p>
+                    <p>Ban da yeu cau rut tien tu vi. Vui long su dung ma OTP duoi day de xac nhan:</p>
+                    <div class='otp-code'>{otpCode}</div>
+                    <p class='warning'>Ma OTP co hieu luc trong 10 phut. Khong chia se ma nay voi bat ky ai.</p>
+                    <p>Neu ban khong yeu cau rut tien, vui long bo qua email nay.</p>
+                    <p>Tran trong,<br>Realtime Auction Platform</p>
+                </div>
+            </div>
+        </body>
+        </html>";
+
+        await SendEmailAsync(toEmail, toName, "Ma xac nhan rut tien - Realtime Auction Platform", htmlContent);
+    }
+
+    public async Task SendWithdrawalApprovedEmailAsync(string toEmail, string toName, decimal amount, string bankInfo)
+    {
+        var htmlContent = $@"
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <style>
+                body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
+                .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
+                .header {{ background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; text-align: center; border-radius: 8px 8px 0 0; }}
+                .content {{ background: #f9f9f9; padding: 30px; border-radius: 0 0 8px 8px; }}
+                .info-box {{ background: white; padding: 15px; border-radius: 8px; margin: 15px 0; border-left: 4px solid #667eea; }}
+            </style>
+        </head>
+        <body>
+            <div class='container'>
+                <div class='header'>
+                    <h1>Yeu cau rut tien da duoc duyet</h1>
+                </div>
+                <div class='content'>
+                    <p>Xin chao <strong>{toName}</strong>,</p>
+                    <p>Yeu cau rut tien cua ban da duoc admin duyet va dang xu ly chuyen khoan.</p>
+                    <div class='info-box'>
+                        <p><strong>So tien:</strong> {amount:N0} VND</p>
+                        <p><strong>Tai khoan:</strong> {bankInfo}</p>
+                    </div>
+                    <p>Chung toi se thong bao khi chuyen khoan hoan tat.</p>
+                    <p>Tran trong,<br>Realtime Auction Platform</p>
+                </div>
+            </div>
+        </body>
+        </html>";
+
+        await SendEmailAsync(toEmail, toName, "Yeu cau rut tien da duoc duyet", htmlContent);
+    }
+
+    public async Task SendWithdrawalRejectedEmailAsync(string toEmail, string toName, decimal amount, string reason)
+    {
+        var htmlContent = $@"
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <style>
+                body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
+                .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
+                .header {{ background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%); color: white; padding: 20px; text-align: center; border-radius: 8px 8px 0 0; }}
+                .content {{ background: #f9f9f9; padding: 30px; border-radius: 0 0 8px 8px; }}
+                .reason-box {{ background: #fff5f5; padding: 15px; border-radius: 8px; margin: 15px 0; border-left: 4px solid #e74c3c; }}
+            </style>
+        </head>
+        <body>
+            <div class='container'>
+                <div class='header'>
+                    <h1>Yeu cau rut tien bi tu choi</h1>
+                </div>
+                <div class='content'>
+                    <p>Xin chao <strong>{toName}</strong>,</p>
+                    <p>Yeu cau rut tien <strong>{amount:N0} VND</strong> da bi tu choi.</p>
+                    <div class='reason-box'>
+                        <p><strong>Ly do:</strong> {reason}</p>
+                    </div>
+                    <p>So tien da duoc hoan ve vi kha dung. Ban co the tao yeu cau rut tien moi.</p>
+                    <p>Tran trong,<br>Realtime Auction Platform</p>
+                </div>
+            </div>
+        </body>
+        </html>";
+
+        await SendEmailAsync(toEmail, toName, "Yeu cau rut tien bi tu choi", htmlContent);
+    }
+
+    public async Task SendWithdrawalCompletedEmailAsync(string toEmail, string toName,
+        decimal amount, decimal fee, decimal finalAmount, string transactionCode, string bankInfo)
+    {
+        var feeInfo = fee > 0 ? $"<p><strong>Phi xu ly:</strong> {fee:N0} VND</p>" : "";
+        var htmlContent = $@"
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <style>
+                body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
+                .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
+                .header {{ background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%); color: white; padding: 20px; text-align: center; border-radius: 8px 8px 0 0; }}
+                .content {{ background: #f9f9f9; padding: 30px; border-radius: 0 0 8px 8px; }}
+                .info-box {{ background: white; padding: 15px; border-radius: 8px; margin: 15px 0; border-left: 4px solid #11998e; }}
+                .success {{ color: #11998e; font-weight: bold; font-size: 18px; }}
+            </style>
+        </head>
+        <body>
+            <div class='container'>
+                <div class='header'>
+                    <h1>Rut tien thanh cong!</h1>
+                </div>
+                <div class='content'>
+                    <p>Xin chao <strong>{toName}</strong>,</p>
+                    <p class='success'>Rut tien thanh cong!</p>
+                    <div class='info-box'>
+                        <p><strong>So tien yeu cau:</strong> {amount:N0} VND</p>
+                        {feeInfo}
+                        <p><strong>So tien nhan:</strong> {finalAmount:N0} VND</p>
+                        <p><strong>Ma giao dich:</strong> {transactionCode}</p>
+                        <p><strong>Tai khoan:</strong> {bankInfo}</p>
+                    </div>
+                    <p>Vui long kiem tra tai khoan ngan hang cua ban.</p>
+                    <p>Tran trong,<br>Realtime Auction Platform</p>
+                </div>
+            </div>
+        </body>
+        </html>";
+
+        await SendEmailAsync(toEmail, toName, "Rut tien thanh cong!", htmlContent);
+    }
+
+    public async Task SendWithdrawalReminderToAdminAsync(string toEmail, string toName,
+        string withdrawalId, string userName, string userEmail, decimal amount, decimal finalAmount,
+        string bankName, string accountLast4, int hoursSinceApproved, string message)
+    {
+        var urgencyClass = hoursSinceApproved >= 48 ? "urgent" : "warning";
+        var urgencyColor = hoursSinceApproved >= 48 ? "#e74c3c" : "#f39c12";
+        var urgencyIcon = hoursSinceApproved >= 48 ? "🚨" : "⚠️";
+
+        var htmlContent = $@"
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <style>
+                body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
+                .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
+                .header {{ background: linear-gradient(135deg, {urgencyColor} 0%, #c0392b 100%); color: white; padding: 20px; text-align: center; border-radius: 8px 8px 0 0; }}
+                .content {{ background: #f9f9f9; padding: 30px; border-radius: 0 0 8px 8px; }}
+                .info-box {{ background: white; padding: 15px; border-radius: 8px; margin: 15px 0; border-left: 4px solid {urgencyColor}; }}
+                .message-box {{ background: #fff5f5; padding: 15px; border-radius: 8px; margin: 15px 0; border-left: 4px solid {urgencyColor}; font-weight: bold; }}
+                .detail-row {{ display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #eee; }}
+                .detail-label {{ font-weight: bold; color: #555; }}
+                .detail-value {{ color: #333; }}
+            </style>
+        </head>
+        <body>
+            <div class='container'>
+                <div class='header'>
+                    <h1>{urgencyIcon} Nhac nho: Rut tien can xu ly</h1>
+                </div>
+                <div class='content'>
+                    <p>Xin chao <strong>{toName}</strong>,</p>
+                    <div class='message-box'>
+                        {message}
+                    </div>
+                    <div class='info-box'>
+                        <div class='detail-row'>
+                            <span class='detail-label'>Ma yeu cau:</span>
+                            <span class='detail-value'>{withdrawalId}</span>
+                        </div>
+                        <div class='detail-row'>
+                            <span class='detail-label'>Nguoi dung:</span>
+                            <span class='detail-value'>{userName} ({userEmail})</span>
+                        </div>
+                        <div class='detail-row'>
+                            <span class='detail-label'>So tien yeu cau:</span>
+                            <span class='detail-value'>{amount:N0} VND</span>
+                        </div>
+                        <div class='detail-row'>
+                            <span class='detail-label'>So tien nhan:</span>
+                            <span class='detail-value'>{finalAmount:N0} VND</span>
+                        </div>
+                        <div class='detail-row'>
+                            <span class='detail-label'>Tai khoan:</span>
+                            <span class='detail-value'>{bankName} - {accountLast4}</span>
+                        </div>
+                        <div class='detail-row'>
+                            <span class='detail-label'>Thoi gian da duyet:</span>
+                            <span class='detail-value'>{hoursSinceApproved} gio truoc</span>
+                        </div>
+                    </div>
+                    <p>Vui long vao Admin Dashboard de xu ly yeu cau rut tien nay.</p>
+                    <p>Tran trong,<br>Realtime Auction Platform</p>
+                </div>
+            </div>
+        </body>
+        </html>";
+
+        var subject = hoursSinceApproved >= 48 
+            ? $"🚨 CẢNH BÁO: Yêu cầu rút tiền cần xử lý ngay - {hoursSinceApproved} giờ"
+            : $"⚠️ Nhắc nhở: Yêu cầu rút tiền cần xử lý - {hoursSinceApproved} giờ";
+
+        await SendEmailAsync(toEmail, toName, subject, htmlContent);
+    }
 }
+
 

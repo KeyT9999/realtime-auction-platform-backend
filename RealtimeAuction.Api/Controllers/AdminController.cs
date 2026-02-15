@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using RealtimeAuction.Api.Dtos.Admin;
+using RealtimeAuction.Api.Dtos.Withdrawal;
 using RealtimeAuction.Api.Models;
 using RealtimeAuction.Api.Models.Enums;
 using RealtimeAuction.Api.Repositories;
@@ -19,6 +20,7 @@ public class AdminController : ControllerBase
     private readonly IBidRepository _bidRepository;
     private readonly IUserRepository _userRepository;
     private readonly ICategoryRepository _categoryRepository;
+    private readonly IWithdrawalService _withdrawalService;
     private readonly ILogger<AdminController> _logger;
 
     public AdminController(
@@ -27,6 +29,7 @@ public class AdminController : ControllerBase
         IBidRepository bidRepository,
         IUserRepository userRepository,
         ICategoryRepository categoryRepository,
+        IWithdrawalService withdrawalService,
         ILogger<AdminController> logger)
     {
         _adminService = adminService;
@@ -34,6 +37,7 @@ public class AdminController : ControllerBase
         _bidRepository = bidRepository;
         _userRepository = userRepository;
         _categoryRepository = categoryRepository;
+        _withdrawalService = withdrawalService;
         _logger = logger;
     }
 
@@ -700,5 +704,193 @@ public class AdminController : ControllerBase
             _logger.LogError(ex, "Error subtracting balance");
             return BadRequest(new { message = ex.Message });
         }
+    }
+
+    // ===== Withdrawal Management Endpoints =====
+
+    [HttpGet("withdrawals")]
+    public async Task<IActionResult> GetWithdrawals([FromQuery] int? status = null)
+    {
+        try
+        {
+            var withdrawals = await _withdrawalService.GetAllWithdrawalsAsync(status);
+            return Ok(new
+            {
+                withdrawals = withdrawals.Select(w => new
+                {
+                    id = w.Id,
+                    userId = w.UserId,
+                    amount = w.Amount,
+                    processingFee = w.ProcessingFee,
+                    finalAmount = w.FinalAmount,
+                    status = (int)w.Status,
+                    statusText = GetWithdrawalStatusText(w.Status),
+                    bankSnapshot = w.BankSnapshot,
+                    isOtpVerified = w.IsOtpVerified,
+                    otpVerifiedAt = w.OtpVerifiedAt,
+                    approvedBy = w.ApprovedBy,
+                    approvedAt = w.ApprovedAt,
+                    rejectedBy = w.RejectedBy,
+                    rejectedAt = w.RejectedAt,
+                    rejectionReason = w.RejectionReason,
+                    transactionCode = w.TransactionCode,
+                    transactionProof = w.TransactionProof,
+                    completedAt = w.CompletedAt,
+                    cancelledAt = w.CancelledAt,
+                    cancelReason = w.CancelReason,
+                    createdAt = w.CreatedAt
+                }),
+                totalCount = withdrawals.Count
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting withdrawals");
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
+    [HttpGet("withdrawals/{id}")]
+    public async Task<IActionResult> GetWithdrawalDetail(string id)
+    {
+        try
+        {
+            var w = await _withdrawalService.GetWithdrawalByIdAsync(id);
+            if (w == null) return NotFound(new { message = "Yêu cầu không tồn tại" });
+
+            var user = await _userRepository.GetByIdAsync(w.UserId);
+
+            return Ok(new
+            {
+                id = w.Id,
+                userId = w.UserId,
+                userName = user?.FullName,
+                userEmail = user?.Email,
+                amount = w.Amount,
+                processingFee = w.ProcessingFee,
+                finalAmount = w.FinalAmount,
+                status = (int)w.Status,
+                statusText = GetWithdrawalStatusText(w.Status),
+                bankSnapshot = w.BankSnapshot,
+                isOtpVerified = w.IsOtpVerified,
+                otpVerifiedAt = w.OtpVerifiedAt,
+                approvedBy = w.ApprovedBy,
+                approvedAt = w.ApprovedAt,
+                rejectedBy = w.RejectedBy,
+                rejectedAt = w.RejectedAt,
+                rejectionReason = w.RejectionReason,
+                transactionCode = w.TransactionCode,
+                transactionProof = w.TransactionProof,
+                completedAt = w.CompletedAt,
+                cancelledAt = w.CancelledAt,
+                cancelReason = w.CancelReason,
+                createdAt = w.CreatedAt
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting withdrawal detail");
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
+    [HttpPost("withdrawals/{id}/approve")]
+    public async Task<IActionResult> ApproveWithdrawal(string id)
+    {
+        try
+        {
+            var adminId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (string.IsNullOrEmpty(adminId))
+                return Unauthorized(new { message = "Vui lòng đăng nhập" });
+
+            var result = await _withdrawalService.AdminApproveAsync(adminId, id);
+            return Ok(new { message = "Đã duyệt yêu cầu rút tiền", status = (int)result.Status });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error approving withdrawal");
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
+    [HttpPost("withdrawals/{id}/reject")]
+    public async Task<IActionResult> RejectWithdrawal(string id, [FromBody] AdminRejectWithdrawalRequest request)
+    {
+        try
+        {
+            var adminId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (string.IsNullOrEmpty(adminId))
+                return Unauthorized(new { message = "Vui lòng đăng nhập" });
+
+            var result = await _withdrawalService.AdminRejectAsync(adminId, id, request.Reason);
+            return Ok(new { message = "Đã từ chối yêu cầu rút tiền", status = (int)result.Status });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error rejecting withdrawal");
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
+    [HttpPost("withdrawals/{id}/complete")]
+    public async Task<IActionResult> CompleteWithdrawal(string id, [FromBody] AdminCompleteWithdrawalRequest request)
+    {
+        try
+        {
+            var adminId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (string.IsNullOrEmpty(adminId))
+                return Unauthorized(new { message = "Vui lòng đăng nhập" });
+
+            // Validate transactionCode required
+            if (string.IsNullOrEmpty(request.TransactionCode))
+            {
+                return BadRequest(new { message = "Mã giao dịch là bắt buộc" });
+            }
+
+            string? proofUrl = request.TransactionProof; // If provided as URL in request
+            // TODO: If proof needs to be uploaded via IFormFile, create separate endpoint
+
+            var result = await _withdrawalService.AdminCompleteAsync(
+                adminId, id, request.TransactionCode, proofUrl, request.ActualAmount);
+            return Ok(new { message = "Đã hoàn tất rút tiền", status = (int)result.Status });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error completing withdrawal");
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
+    [HttpPost("withdrawals/{id}/revert")]
+    public async Task<IActionResult> RevertWithdrawal(string id)
+    {
+        try
+        {
+            var adminId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (string.IsNullOrEmpty(adminId))
+                return Unauthorized(new { message = "Vui lòng đăng nhập" });
+
+            var result = await _withdrawalService.AdminRevertAsync(adminId, id);
+            return Ok(new { message = "Đã revert yêu cầu về trạng thái chờ duyệt", status = (int)result.Status });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error reverting withdrawal");
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
+    private static string GetWithdrawalStatusText(WithdrawalStatus status)
+    {
+        return status switch
+        {
+            WithdrawalStatus.Pending => "Chờ xác nhận OTP",
+            WithdrawalStatus.OtpVerified => "Chờ admin duyệt",
+            WithdrawalStatus.Processing => "Đang xử lý",
+            WithdrawalStatus.Completed => "Hoàn tất",
+            WithdrawalStatus.Rejected => "Bị từ chối",
+            WithdrawalStatus.Cancelled => "Đã hủy",
+            _ => "Không xác định"
+        };
     }
 }
