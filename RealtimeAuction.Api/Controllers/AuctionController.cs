@@ -25,8 +25,8 @@ public class AuctionController : ControllerBase
     private readonly IBidRepository _bidRepository;
     private readonly IBidService _bidService;
     private readonly ITransactionRepository _transactionRepository;
-    private readonly IHubContext<AuctionHub> _hubContext;
     private readonly IEmailService _emailService;
+    private readonly IHubContext<AuctionHub> _hubContext;
     private readonly ILogger<AuctionController> _logger;
 
     public AuctionController(
@@ -37,8 +37,8 @@ public class AuctionController : ControllerBase
         IBidRepository bidRepository,
         IBidService bidService,
         ITransactionRepository transactionRepository,
-        IHubContext<AuctionHub> hubContext,
         IEmailService emailService,
+        IHubContext<AuctionHub> hubContext,
         ILogger<AuctionController> logger)
     {
         _auctionRepository = auctionRepository;
@@ -48,8 +48,8 @@ public class AuctionController : ControllerBase
         _bidRepository = bidRepository;
         _bidService = bidService;
         _transactionRepository = transactionRepository;
-        _hubContext = hubContext;
         _emailService = emailService;
+        _hubContext = hubContext;
         _logger = logger;
     }
 
@@ -112,6 +112,7 @@ public class AuctionController : ControllerBase
                 auctions = await _auctionRepository.GetAllAsync();
             }
 
+
             // Apply pagination to simple queries
             var simpleTotalCount = auctions.Count;
             var paginatedAuctions = auctions
@@ -149,16 +150,17 @@ public class AuctionController : ControllerBase
                 return NotFound(new { message = "Auction not found" });
             }
 
-            // Auto-activate auction if it's time to start
-            if (auction.Status == AuctionStatus.Draft)
+            // Auto-activate auction if it's time to start (for scheduled auctions)
+            var now = DateTime.UtcNow;
+            if (auction.Status != AuctionStatus.Active && 
+                now >= auction.StartTime && 
+                now < auction.EndTime &&
+                auction.Status != AuctionStatus.Completed &&
+                auction.Status != AuctionStatus.Cancelled)
             {
-                var now = DateTime.UtcNow;
-                if (now >= auction.StartTime && now < auction.EndTime)
-                {
-                    _logger.LogInformation($"Auto-activating auction {id} - time has come");
-                    auction.Status = AuctionStatus.Active;
-                    await _auctionRepository.UpdateAsync(auction);
-                }
+                _logger.LogInformation($"Auto-activating auction {id} - time has come");
+                auction.Status = AuctionStatus.Active;
+                await _auctionRepository.UpdateAsync(auction);
             }
 
             var response = await MapToResponseDto(auction);
@@ -235,6 +237,12 @@ public class AuctionController : ControllerBase
                 return BadRequest(new { message = "End time must be after start time" });
             }
 
+            // Determine initial status based on start time
+            var now = DateTime.UtcNow;
+            var initialStatus = request.StartTime <= now 
+                ? AuctionStatus.Active  // Start immediately if start time has passed
+                : AuctionStatus.Active;  // Also Active if scheduled for future (will be handled by background service)
+
             var auction = new Auction
             {
                 Title = request.Title,
@@ -245,7 +253,7 @@ public class AuctionController : ControllerBase
                 StartTime = request.StartTime,
                 EndTime = request.EndTime,
                 Duration = request.Duration,
-                Status = AuctionStatus.Draft,
+                Status = initialStatus,
                 SellerId = userId,
                 CategoryId = request.CategoryId,
                 ProductId = request.ProductId,
@@ -257,6 +265,23 @@ public class AuctionController : ControllerBase
 
             var created = await _auctionRepository.CreateAsync(auction);
             var response = await MapToResponseDto(created);
+
+            // Realtime: notify admins and seller about new auction creation
+            await _hubContext.Clients.Group(GroupNames.Admins).SendAsync("AdminNotification", new
+            {
+                type = "AuctionCreated",
+                auctionId = response.Id,
+                sellerId = userId,
+                message = $"[Auction] Tạo đấu giá mới: {response.Title}"
+            });
+
+            await _hubContext.Clients.Group(GroupNames.User(userId)).SendAsync("UserNotification", new
+            {
+                type = "AuctionCreated",
+                auctionId = response.Id,
+                message = $"Bạn đã tạo đấu giá: {response.Title}"
+            });
+
             return CreatedAtAction(nameof(GetAuctionById), new { id = response.Id }, response);
         }
         catch (Exception ex)
@@ -402,6 +427,41 @@ public class AuctionController : ControllerBase
             auction.Status = request.Status;
             var updated = await _auctionRepository.UpdateAsync(auction);
             var response = await MapToResponseDto(updated);
+
+            // Realtime: auction status changed
+            await _hubContext.Clients.Group(GroupNames.Auction(id)).SendAsync("AuctionStatusChanged", new
+            {
+                auctionId = id,
+                status = (int)response.Status,
+                message = $"Trạng thái đấu giá thay đổi: {response.Status}"
+            });
+
+            // Notify seller + admins
+            await _hubContext.Clients.Group(GroupNames.User(response.SellerId)).SendAsync("UserNotification", new
+            {
+                type = "AuctionStatusChanged",
+                auctionId = id,
+                status = (int)response.Status,
+                message = $"Trạng thái đấu giá \"{response.Title}\" -> {response.Status}"
+            });
+
+            await _hubContext.Clients.Group(GroupNames.Admins).SendAsync("AdminNotification", new
+            {
+                type = "AuctionStatusChanged",
+                auctionId = id,
+                status = (int)response.Status,
+                message = $"[Auction] Status {response.Status} for {response.Title}"
+            });
+
+            if (response.Status == AuctionStatus.Completed || response.Status == AuctionStatus.Cancelled)
+            {
+                await _hubContext.Clients.Group(GroupNames.Auction(id)).SendAsync("AuctionEnded", new
+                {
+                    auctionId = id,
+                    status = (int)response.Status
+                });
+            }
+
             return Ok(response);
         }
         catch (Exception ex)
@@ -424,7 +484,7 @@ public class AuctionController : ControllerBase
             {
                 TotalAuctions = allAuctions.Count,
                 ActiveAuctions = allAuctions.Count(a => a.Status == AuctionStatus.Active),
-                DraftAuctions = allAuctions.Count(a => a.Status == AuctionStatus.Draft),
+                DraftAuctions = 0, // Draft status removed - always 0
                 CompletedAuctions = completedAuctions.Count,
                 CancelledAuctions = allAuctions.Count(a => a.Status == AuctionStatus.Cancelled),
                 PendingAuctions = allAuctions.Count(a => a.Status == AuctionStatus.Pending),
@@ -856,10 +916,10 @@ public class AuctionController : ControllerBase
             // Check if can cancel
             var bids = await _bidRepository.GetByAuctionIdAsync(id);
             
-            // Can only cancel Draft or Active
-            if (auction.Status != AuctionStatus.Draft && auction.Status != AuctionStatus.Active)
+            // Can only cancel Active auctions
+            if (auction.Status != AuctionStatus.Active)
             {
-                return BadRequest(new { message = "Can only cancel draft or active auctions" });
+                return BadRequest(new { message = "Can only cancel active auctions" });
             }
 
             // Nếu có bids, release hold cho tất cả bidders trước khi cancel

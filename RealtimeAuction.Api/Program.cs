@@ -7,11 +7,11 @@ using RealtimeAuction.Api.Services;
 using RealtimeAuction.Api.Settings;
 using MongoDB.Driver;
 using Microsoft.AspNetCore.Authentication.Google;
+using Microsoft.AspNetCore.SignalR;
+using RealtimeAuction.Api.Hubs;
 using System.Text.Json;
 
-// #region agent log
-try { System.IO.File.AppendAllText(@"d:\DauGia\.cursor\debug.log", JsonSerializer.Serialize(new { sessionId = "debug-session", runId = "run1", hypothesisId = "D", location = "Program.cs:13", message = "Application startup - loading .env", data = new { currentDir = Directory.GetCurrentDirectory(), envPath = Path.Combine(Directory.GetCurrentDirectory(), "..", ".env"), envExists = File.Exists(Path.Combine(Directory.GetCurrentDirectory(), "..", ".env")) }, timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() }) + "\n"); } catch { }
-// #endregion agent log
+
 
 // Load .env file - thử nhiều đường dẫn
 var envPath1 = Path.Combine(Directory.GetCurrentDirectory(), ".env");
@@ -42,25 +42,19 @@ else
     Env.Load();
 }
 
-// #region agent log
-try { System.IO.File.AppendAllText(@"d:\DauGia\.cursor\debug.log", JsonSerializer.Serialize(new { sessionId = "debug-session", runId = "run1", hypothesisId = "B", location = "Program.cs:37", message = "After Env.Load - checking variables", data = new { actualEnvPath = actualEnvPath, mailHostAfterLoad = Environment.GetEnvironmentVariable("MAIL_HOST"), mailUsernameAfterLoad = Environment.GetEnvironmentVariable("MAIL_USERNAME") != null ? "SET" : "NULL" }, timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() }) + "\n"); } catch { }
-// #endregion agent log
+
 
 // Nếu Env.Load() không load được, đọc trực tiếp từ file và set vào Environment
 if (string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("MAIL_HOST")) && !string.IsNullOrWhiteSpace(actualEnvPath) && File.Exists(actualEnvPath))
 {
-    // #region agent log
-    try { System.IO.File.AppendAllText(@"d:\DauGia\.cursor\debug.log", JsonSerializer.Serialize(new { sessionId = "debug-session", runId = "run1", hypothesisId = "B", location = "Program.cs:45", message = "Env.Load failed, reading .env file directly", data = new { }, timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() }) + "\n"); } catch { }
-    // #endregion agent log
+
 
     var envLines = File.ReadAllLines(actualEnvPath);
     var mailVariablesFound = new List<string>();
     var totalLines = envLines.Length;
     var processedLines = 0;
     
-    // #region agent log
-    try { System.IO.File.AppendAllText(@"d:\DauGia\.cursor\debug.log", JsonSerializer.Serialize(new { sessionId = "debug-session", runId = "run1", hypothesisId = "B", location = "Program.cs:56", message = "Reading .env file", data = new { actualEnvPath = actualEnvPath, totalLines = totalLines }, timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() }) + "\n"); } catch { }
-    // #endregion agent log
+
     
     foreach (var line in envLines)
     {
@@ -89,16 +83,12 @@ if (string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("MAIL_HOST")) &
         }
     }
 
-    // #region agent log
-    try { System.IO.File.AppendAllText(@"d:\DauGia\.cursor\debug.log", JsonSerializer.Serialize(new { sessionId = "debug-session", runId = "run1", hypothesisId = "B", location = "Program.cs:85", message = "After reading .env file directly", data = new { processedLines = processedLines, mailVariablesCount = mailVariablesFound.Count, mailVariablesFound = string.Join("; ", mailVariablesFound), mailHostAfterDirectRead = Environment.GetEnvironmentVariable("MAIL_HOST") ?? "NULL", mailUsernameAfterDirectRead = Environment.GetEnvironmentVariable("MAIL_USERNAME") != null ? "SET" : "NULL", mailPasswordAfterDirectRead = Environment.GetEnvironmentVariable("MAIL_PASSWORD") != null ? "SET" : "NULL" }, timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() }) + "\n"); } catch { }
-    // #endregion agent log
+
 }
 
 var builder = WebApplication.CreateBuilder(args);
 
-// #region agent log
-try { System.IO.File.AppendAllText(@"d:\DauGia\.cursor\debug.log", JsonSerializer.Serialize(new { sessionId = "debug-session", runId = "run1", hypothesisId = "D", location = "Program.cs:17", message = "Builder created - checking URL configuration", data = new { aspnetcoreUrls = Environment.GetEnvironmentVariable("ASPNETCORE_URLS"), aspnetcoreHttpsPort = Environment.GetEnvironmentVariable("ASPNETCORE_HTTPS_PORT"), configUrls = builder.Configuration["ASPNETCORE_URLS"], configHttpsPort = builder.Configuration["ASPNETCORE_HTTPS_PORT"] }, timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() }) + "\n"); } catch { }
-// #endregion agent log
+
 
 // Configure MongoDB Settings
 var mongoDbSettings = new MongoDbSettings
@@ -167,9 +157,7 @@ var mailPassword = Environment.GetEnvironmentVariable("MAIL_PASSWORD");
 var mailFrom = Environment.GetEnvironmentVariable("MAIL_FROM");
 var mailReplyTo = Environment.GetEnvironmentVariable("MAIL_REPLY_TO");
 
-// #region agent log
-try { System.IO.File.AppendAllText(@"d:\DauGia\.cursor\debug.log", JsonSerializer.Serialize(new { sessionId = "debug-session", runId = "run1", hypothesisId = "B", location = "Program.cs:51", message = "Reading email env variables", data = new { mailHost = mailHost ?? "NULL", mailPort = mailPort ?? "NULL", hasMailUsername = !string.IsNullOrWhiteSpace(mailUsername), hasMailPassword = !string.IsNullOrWhiteSpace(mailPassword), mailFrom = mailFrom ?? "NULL" }, timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() }) + "\n"); } catch { }
-// #endregion agent log
+
 
 // Kiểm tra xem có cấu hình SMTP không
 var useSmtp = !string.IsNullOrWhiteSpace(mailHost) && 
@@ -182,9 +170,7 @@ Console.WriteLine($"[Email Config] MAIL_USERNAME: {(string.IsNullOrWhiteSpace(ma
 Console.WriteLine($"[Email Config] MAIL_PASSWORD: {(string.IsNullOrWhiteSpace(mailPassword) ? "NOT SET" : "SET")}");
 Console.WriteLine($"[Email Config] UseSmtp: {useSmtp}");
 
-// #region agent log
-try { System.IO.File.AppendAllText(@"d:\DauGia\.cursor\debug.log", JsonSerializer.Serialize(new { sessionId = "debug-session", runId = "run1", hypothesisId = "B", location = "Program.cs:67", message = "Email config calculated", data = new { useSmtp = useSmtp }, timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() }) + "\n"); } catch { }
-// #endregion agent log
+
 
 // Parse MAIL_FROM nếu có format "Name <email>"
 string fromEmail = string.Empty;
@@ -234,9 +220,7 @@ var emailSettings = new EmailSettings
         ?? string.Empty
 };
 
-// #region agent log
-try { System.IO.File.AppendAllText(@"d:\DauGia\.cursor\debug.log", JsonSerializer.Serialize(new { sessionId = "debug-session", runId = "run1", hypothesisId = "A", location = "Program.cs:190", message = "Final EmailSettings values", data = new { useSmtp = emailSettings.UseSmtp, smtpHost = emailSettings.SmtpHost, smtpPort = emailSettings.SmtpPort, smtpUsernameLength = emailSettings.SmtpUsername?.Length ?? 0, smtpPasswordLength = emailSettings.SmtpPassword?.Length ?? 0, fromEmail = emailSettings.FromEmail, fromName = emailSettings.FromName, hasApiKey = !string.IsNullOrWhiteSpace(emailSettings.ApiKey) }, timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() }) + "\n"); } catch { }
-// #endregion agent log
+
 
 // Add services to the container.
 builder.Services.AddSingleton(mongoDbSettings);
@@ -329,6 +313,23 @@ builder.Services.AddAuthentication(options =>
         ValidAudience = jwtSettings.Audience,
         IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSettings.Secret))
     };
+
+    // Allow JWT to be passed via query string for SignalR WebSockets
+    options.Events = new JwtBearerEvents
+    {
+        OnMessageReceived = context =>
+        {
+            var accessToken = context.Request.Query["access_token"];
+            var path = context.HttpContext.Request.Path;
+
+            if (!string.IsNullOrEmpty(accessToken) && path.StartsWithSegments("/auctionHub"))
+            {
+                context.Token = accessToken;
+            }
+
+            return Task.CompletedTask;
+        }
+    };
 });
 
 builder.Services.AddAuthorization(options =>
@@ -357,7 +358,7 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowReactApp", policy =>
     {
-        policy.WithOrigins("http://localhost:5173")
+        policy.WithOrigins("http://localhost:5173", "http://localhost:5174")
               .AllowAnyHeader()
               .AllowAnyMethod()
               .AllowCredentials();
@@ -402,23 +403,5 @@ app.MapControllers();
 
 // Map SignalR Hub
 app.MapHub<RealtimeAuction.Api.Hubs.AuctionHub>("/auctionHub");
-
-// #region agent log
-try 
-{ 
-    var appUrls = app.Urls;
-    var configuredUrls = new List<string>();
-    foreach (var url in appUrls) { configuredUrls.Add(url); }
-    System.IO.File.AppendAllText(@"d:\DauGia\.cursor\debug.log", JsonSerializer.Serialize(new { sessionId = "debug-session", runId = "run1", hypothesisId = "E", location = "Program.cs:174", message = "Before app.Run() - configured URLs", data = new { urls = configuredUrls, urlsCount = configuredUrls.Count, aspnetcoreUrls = Environment.GetEnvironmentVariable("ASPNETCORE_URLS"), launchProfile = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") }, timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() }) + "\n"); 
-} 
-catch (Exception ex) 
-{ 
-    System.IO.File.AppendAllText(@"d:\DauGia\.cursor\debug.log", JsonSerializer.Serialize(new { sessionId = "debug-session", runId = "run1", hypothesisId = "E", location = "Program.cs:174", message = "Error logging URLs before Run()", data = new { error = ex.Message, stackTrace = ex.StackTrace }, timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() }) + "\n"); 
-}
-// #endregion agent log
-
-// #region agent log
-try { System.IO.File.AppendAllText(@"d:\DauGia\.cursor\debug.log", JsonSerializer.Serialize(new { sessionId = "debug-session", runId = "run1", hypothesisId = "A", location = "Program.cs:177", message = "About to start app.Run() - port binding will occur", data = new { timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() }, timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() }) + "\n"); } catch { }
-// #endregion agent log
 
 app.Run();

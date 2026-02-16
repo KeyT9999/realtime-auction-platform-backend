@@ -63,6 +63,17 @@ public class BidRepository : IBidRepository
             .FirstOrDefaultAsync();
     }
 
+    public async Task SetWinningBidAsync(string auctionId, string winningBidId)
+    {
+        // Clear previous winning flags (best-effort)
+        var clearUpdate = Builders<Bid>.Update.Set(b => b.IsWinningBid, false);
+        await _bids.UpdateManyAsync(b => b.AuctionId == auctionId, clearUpdate);
+
+        // Set the new winning bid
+        var setUpdate = Builders<Bid>.Update.Set(b => b.IsWinningBid, true);
+        await _bids.UpdateOneAsync(b => b.Id == winningBidId && b.AuctionId == auctionId, setUpdate);
+    }
+
     public async Task<List<Bid>> GetAllAsync()
     {
         return await _bids.Find(_ => true).ToListAsync();

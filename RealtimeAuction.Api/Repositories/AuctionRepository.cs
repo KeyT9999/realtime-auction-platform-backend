@@ -95,7 +95,6 @@ public class AuctionRepository : IAuctionRepository
         // Define valid transitions
         return currentStatus switch
         {
-            AuctionStatus.Draft => newStatus == AuctionStatus.Active || newStatus == AuctionStatus.Cancelled,
             AuctionStatus.Active => newStatus == AuctionStatus.Pending || newStatus == AuctionStatus.Cancelled,
             AuctionStatus.Pending => newStatus == AuctionStatus.Completed || newStatus == AuctionStatus.Cancelled,
             AuctionStatus.Completed => false, // Cannot transition from Completed
@@ -176,6 +175,7 @@ public class AuctionRepository : IAuctionRepository
                     break;
             }
         }
+
 
         // Combine all filters
         var combinedFilter = filters.Count > 0 
