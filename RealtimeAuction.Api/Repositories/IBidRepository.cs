@@ -11,5 +11,6 @@ public interface IBidRepository
     Task<List<Bid>> GetByUserIdAsync(string userId);
     Task<Bid?> GetHighestBidAsync(string auctionId);
     Task<Bid?> GetWinningBidAsync(string auctionId);
+    Task SetWinningBidAsync(string auctionId, string winningBidId);
     Task<List<Bid>> GetAllAsync();
 }

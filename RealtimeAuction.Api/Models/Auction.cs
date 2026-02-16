@@ -30,7 +30,7 @@ public class Auction
     public int Duration { get; set; } // Stored in minutes, can be updated (e.g., when auto-extend occurs)
 
     [BsonRepresentation(BsonType.Int32)]
-    public AuctionStatus Status { get; set; } = AuctionStatus.Draft;
+    public AuctionStatus Status { get; set; } = AuctionStatus.Active;
 
     [BsonRepresentation(BsonType.ObjectId)]
     public string SellerId { get; set; } = null!; // Reference to User

@@ -23,9 +23,7 @@ public class EmailService : IEmailService
     {
         try
         {
-            // #region agent log
-            try { System.IO.File.AppendAllText(@"d:\DauGia\.cursor\debug.log", System.Text.Json.JsonSerializer.Serialize(new { sessionId = "debug-session", runId = "run1", hypothesisId = "B", location = "EmailService.cs:22", message = "SendEmailAsync called", data = new { toEmail = toEmail, useSmtp = _emailSettings.UseSmtp, smtpHost = _emailSettings.SmtpHost, hasSmtpUsername = !string.IsNullOrWhiteSpace(_emailSettings.SmtpUsername), hasSmtpPassword = !string.IsNullOrWhiteSpace(_emailSettings.SmtpPassword) }, timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() }) + "\n"); } catch { }
-            // #endregion agent log
+
 
             _logger.LogInformation("Attempting to send email. UseSmtp: {UseSmtp}, SmtpHost: {SmtpHost}, SmtpUsername: {SmtpUsername}", 
                 _emailSettings.UseSmtp, 
@@ -34,28 +32,20 @@ public class EmailService : IEmailService
             
             if (_emailSettings.UseSmtp)
             {
-                // #region agent log
-                try { System.IO.File.AppendAllText(@"d:\DauGia\.cursor\debug.log", System.Text.Json.JsonSerializer.Serialize(new { sessionId = "debug-session", runId = "run1", hypothesisId = "B", location = "EmailService.cs:30", message = "Using SMTP to send email", data = new { }, timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() }) + "\n"); } catch { }
-                // #endregion agent log
+
                 await SendEmailViaSmtpAsync(toEmail, toName, subject, htmlContent);
             }
             else
             {
-                // #region agent log
-                try { System.IO.File.AppendAllText(@"d:\DauGia\.cursor\debug.log", System.Text.Json.JsonSerializer.Serialize(new { sessionId = "debug-session", runId = "run1", hypothesisId = "B", location = "EmailService.cs:35", message = "Using SendGrid to send email", data = new { }, timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() }) + "\n"); } catch { }
-                // #endregion agent log
+
                 await SendEmailViaSendGridAsync(toEmail, toName, subject, htmlContent);
             }
 
-            // #region agent log
-            try { System.IO.File.AppendAllText(@"d:\DauGia\.cursor\debug.log", System.Text.Json.JsonSerializer.Serialize(new { sessionId = "debug-session", runId = "run1", hypothesisId = "B", location = "EmailService.cs:40", message = "SendEmailAsync completed successfully", data = new { }, timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() }) + "\n"); } catch { }
-            // #endregion agent log
+
         }
         catch (Exception ex)
         {
-            // #region agent log
-            try { System.IO.File.AppendAllText(@"d:\DauGia\.cursor\debug.log", System.Text.Json.JsonSerializer.Serialize(new { sessionId = "debug-session", runId = "run1", hypothesisId = "B", location = "EmailService.cs:43", message = "SendEmailAsync exception", data = new { error = ex.Message, stackTrace = ex.StackTrace }, timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() }) + "\n"); } catch { }
-            // #endregion agent log
+
             _logger.LogError(ex, "Error sending email to {Email}", toEmail);
             throw;
         }
@@ -63,17 +53,13 @@ public class EmailService : IEmailService
 
     private async Task SendEmailViaSmtpAsync(string toEmail, string toName, string subject, string htmlContent)
     {
-        // #region agent log
-        try { System.IO.File.AppendAllText(@"d:\DauGia\.cursor\debug.log", System.Text.Json.JsonSerializer.Serialize(new { sessionId = "debug-session", runId = "run1", hypothesisId = "B", location = "EmailService.cs:47", message = "SendEmailViaSmtpAsync called", data = new { smtpHost = _emailSettings.SmtpHost, smtpPort = _emailSettings.SmtpPort, hasUsername = !string.IsNullOrWhiteSpace(_emailSettings.SmtpUsername), hasPassword = !string.IsNullOrWhiteSpace(_emailSettings.SmtpPassword) }, timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() }) + "\n"); } catch { }
-        // #endregion agent log
+
 
         if (string.IsNullOrWhiteSpace(_emailSettings.SmtpHost) || 
             string.IsNullOrWhiteSpace(_emailSettings.SmtpUsername) ||
             string.IsNullOrWhiteSpace(_emailSettings.SmtpPassword))
         {
-            // #region agent log
-            try { System.IO.File.AppendAllText(@"d:\DauGia\.cursor\debug.log", System.Text.Json.JsonSerializer.Serialize(new { sessionId = "debug-session", runId = "run1", hypothesisId = "B", location = "EmailService.cs:52", message = "SMTP settings not configured", data = new { }, timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() }) + "\n"); } catch { }
-            // #endregion agent log
+
             _logger.LogError("SMTP settings are not configured. Email cannot be sent.");
             throw new InvalidOperationException("Email configuration is missing. Please configure SMTP settings (MAIL_HOST, MAIL_USERNAME, MAIL_PASSWORD) in the .env file.");
         }
@@ -95,46 +81,32 @@ public class EmailService : IEmailService
         };
         message.Body = bodyBuilder.ToMessageBody();
 
-        // #region agent log
-        try { System.IO.File.AppendAllText(@"d:\DauGia\.cursor\debug.log", System.Text.Json.JsonSerializer.Serialize(new { sessionId = "debug-session", runId = "run1", hypothesisId = "D", location = "EmailService.cs:74", message = "About to connect to SMTP", data = new { smtpHost = _emailSettings.SmtpHost, smtpPort = _emailSettings.SmtpPort, fromEmail = _emailSettings.FromEmail, fromName = _emailSettings.FromName }, timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() }) + "\n"); } catch { }
-        // #endregion agent log
+
 
         using (var client = new SmtpClient())
         {
             try
             {
-                // #region agent log
-                try { System.IO.File.AppendAllText(@"d:\DauGia\.cursor\debug.log", System.Text.Json.JsonSerializer.Serialize(new { sessionId = "debug-session", runId = "run1", hypothesisId = "D", location = "EmailService.cs:80", message = "Connecting to SMTP server...", data = new { }, timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() }) + "\n"); } catch { }
-                // #endregion agent log
+
                 await client.ConnectAsync(_emailSettings.SmtpHost, _emailSettings.SmtpPort, SecureSocketOptions.StartTls);
                 
-                // #region agent log
-                try { System.IO.File.AppendAllText(@"d:\DauGia\.cursor\debug.log", System.Text.Json.JsonSerializer.Serialize(new { sessionId = "debug-session", runId = "run1", hypothesisId = "D", location = "EmailService.cs:84", message = "Connected! Now authenticating...", data = new { usernameLength = _emailSettings.SmtpUsername?.Length ?? 0, passwordLength = _emailSettings.SmtpPassword?.Length ?? 0 }, timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() }) + "\n"); } catch { }
-                // #endregion agent log
+
                 await client.AuthenticateAsync(_emailSettings.SmtpUsername, _emailSettings.SmtpPassword);
                 
-                // #region agent log
-                try { System.IO.File.AppendAllText(@"d:\DauGia\.cursor\debug.log", System.Text.Json.JsonSerializer.Serialize(new { sessionId = "debug-session", runId = "run1", hypothesisId = "D", location = "EmailService.cs:88", message = "Authenticated! Sending email...", data = new { }, timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() }) + "\n"); } catch { }
-                // #endregion agent log
+
                 await client.SendAsync(message);
                 
-                // #region agent log
-                try { System.IO.File.AppendAllText(@"d:\DauGia\.cursor\debug.log", System.Text.Json.JsonSerializer.Serialize(new { sessionId = "debug-session", runId = "run1", hypothesisId = "D", location = "EmailService.cs:92", message = "Email sent! Disconnecting...", data = new { }, timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() }) + "\n"); } catch { }
-                // #endregion agent log
+
                 await client.DisconnectAsync(true);
             }
             catch (Exception smtpEx)
             {
-                // #region agent log
-                try { System.IO.File.AppendAllText(@"d:\DauGia\.cursor\debug.log", System.Text.Json.JsonSerializer.Serialize(new { sessionId = "debug-session", runId = "run1", hypothesisId = "D", location = "EmailService.cs:98", message = "SMTP operation failed", data = new { exceptionType = smtpEx.GetType().Name, error = smtpEx.Message, innerError = smtpEx.InnerException?.Message }, timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() }) + "\n"); } catch { }
-                // #endregion agent log
+
                 throw;
             }
         }
 
-        // #region agent log
-        try { System.IO.File.AppendAllText(@"d:\DauGia\.cursor\debug.log", System.Text.Json.JsonSerializer.Serialize(new { sessionId = "debug-session", runId = "run1", hypothesisId = "B", location = "EmailService.cs:82", message = "Email sent successfully via SMTP", data = new { }, timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() }) + "\n"); } catch { }
-        // #endregion agent log
+
 
         _logger.LogInformation("Email sent successfully via SMTP to {Email}", toEmail);
     }

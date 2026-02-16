@@ -43,9 +43,7 @@ namespace RealtimeAuction.Api.Services
 
         public async Task<AuthResponse> RegisterAsync(RegisterRequest request)
         {
-            // #region agent log
-            try { System.IO.File.AppendAllText(@"d:\DauGia\.cursor\debug.log", System.Text.Json.JsonSerializer.Serialize(new { sessionId = "debug-session", runId = "run1", hypothesisId = "A", location = "AuthService.cs:42", message = "RegisterAsync called", data = new { email = request.Email, verificationMethod = request.VerificationMethod.ToString() }, timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() }) + "\n"); } catch { }
-            // #endregion agent log
+
 
             var existingUser = await _users.Find(u => u.Email == request.Email).FirstOrDefaultAsync();
             if (existingUser != null)
@@ -73,9 +71,7 @@ namespace RealtimeAuction.Api.Services
 
             await _users.InsertOneAsync(user);
 
-            // #region agent log
-            try { System.IO.File.AppendAllText(@"d:\DauGia\.cursor\debug.log", System.Text.Json.JsonSerializer.Serialize(new { sessionId = "debug-session", runId = "run1", hypothesisId = "A", location = "AuthService.cs:68", message = "User created", data = new { userId = user.Id, email = user.Email, isEmailVerified = user.IsEmailVerified }, timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() }) + "\n"); } catch { }
-            // #endregion agent log
+
 
             // Send verification email dựa trên phương thức được chọn
             bool emailSent = true;
@@ -83,9 +79,7 @@ namespace RealtimeAuction.Api.Services
             
             try
             {
-                // #region agent log
-                try { System.IO.File.AppendAllText(@"d:\DauGia\.cursor\debug.log", System.Text.Json.JsonSerializer.Serialize(new { sessionId = "debug-session", runId = "run1", hypothesisId = "B", location = "AuthService.cs:73", message = "About to send verification email", data = new { verificationMethod = request.VerificationMethod.ToString() }, timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() }) + "\n"); } catch { }
-                // #endregion agent log
+
 
                 if (request.VerificationMethod == VerificationMethod.Otp)
                 {
@@ -96,15 +90,11 @@ namespace RealtimeAuction.Api.Services
                     await SendVerificationEmailAsync(user);
                 }
 
-                // #region agent log
-                try { System.IO.File.AppendAllText(@"d:\DauGia\.cursor\debug.log", System.Text.Json.JsonSerializer.Serialize(new { sessionId = "debug-session", runId = "run1", hypothesisId = "B", location = "AuthService.cs:81", message = "Verification email sent successfully", data = new { }, timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() }) + "\n"); } catch { }
-                // #endregion agent log
+
             }
             catch (Exception ex)
             {
-                // #region agent log
-                try { System.IO.File.AppendAllText(@"d:\DauGia\.cursor\debug.log", System.Text.Json.JsonSerializer.Serialize(new { sessionId = "debug-session", runId = "run1", hypothesisId = "B", location = "AuthService.cs:84", message = "Failed to send verification email", data = new { error = ex.Message, stackTrace = ex.StackTrace }, timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() }) + "\n"); } catch { }
-                // #endregion agent log
+
                 _logger.LogError(ex, "Failed to send verification email to {Email}", user.Email);
                 // Don't fail registration if email fails, but notify user
                 emailSent = false;
@@ -125,18 +115,14 @@ namespace RealtimeAuction.Api.Services
                 Message = emailErrorMessage
             };
 
-            // #region agent log
-            try { System.IO.File.AppendAllText(@"d:\DauGia\.cursor\debug.log", System.Text.Json.JsonSerializer.Serialize(new { sessionId = "debug-session", runId = "run1", hypothesisId = "C", location = "AuthService.cs:98", message = "RegisterAsync returning response", data = new { hasAccessToken = !string.IsNullOrEmpty(response.AccessToken), hasRefreshToken = !string.IsNullOrEmpty(response.RefreshToken) }, timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() }) + "\n"); } catch { }
-            // #endregion agent log
+
 
             return response;
         }
 
         public async Task<AuthResponse> LoginAsync(LoginRequest request)
         {
-            // #region agent log
-            try { System.IO.File.AppendAllText(@"d:\DauGia\.cursor\debug.log", System.Text.Json.JsonSerializer.Serialize(new { sessionId = "debug-session", runId = "run1", hypothesisId = "D", location = "AuthService.cs:101", message = "LoginAsync called", data = new { email = request.Email }, timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() }) + "\n"); } catch { }
-            // #endregion agent log
+
 
             var user = await _users.Find(u => u.Email == request.Email).FirstOrDefaultAsync();
             if (user == null || !BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash))
@@ -144,9 +130,7 @@ namespace RealtimeAuction.Api.Services
                 throw new AuthenticationException("Invalid credentials");
             }
 
-            // #region agent log
-            try { System.IO.File.AppendAllText(@"d:\DauGia\.cursor\debug.log", System.Text.Json.JsonSerializer.Serialize(new { sessionId = "debug-session", runId = "run1", hypothesisId = "D", location = "AuthService.cs:107", message = "User found and password verified", data = new { userId = user.Id, isEmailVerified = user.IsEmailVerified, isLocked = user.IsLocked }, timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() }) + "\n"); } catch { }
-            // #endregion agent log
+
 
             if (user.IsLocked)
             {
@@ -155,15 +139,11 @@ namespace RealtimeAuction.Api.Services
 
             if (!user.IsEmailVerified)
             {
-                // #region agent log
-                try { System.IO.File.AppendAllText(@"d:\DauGia\.cursor\debug.log", System.Text.Json.JsonSerializer.Serialize(new { sessionId = "debug-session", runId = "run1", hypothesisId = "D", location = "AuthService.cs:115", message = "Email not verified - blocking login", data = new { userId = user.Id }, timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() }) + "\n"); } catch { }
-                // #endregion agent log
+
                 throw new AuthenticationException("Email is not verified. Please check your inbox and verify your email.");
             }
 
-            // #region agent log
-            try { System.IO.File.AppendAllText(@"d:\DauGia\.cursor\debug.log", System.Text.Json.JsonSerializer.Serialize(new { sessionId = "debug-session", runId = "run1", hypothesisId = "D", location = "AuthService.cs:119", message = "Login successful - generating tokens", data = new { userId = user.Id }, timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() }) + "\n"); } catch { }
-            // #endregion agent log
+
 
             return GenerateAuthResponse(user);
         }
@@ -551,17 +531,13 @@ namespace RealtimeAuction.Api.Services
 
         private async Task SendOtpEmailAsync(User user)
         {
-            // #region agent log
-            try { System.IO.File.AppendAllText(@"d:\DauGia\.cursor\debug.log", System.Text.Json.JsonSerializer.Serialize(new { sessionId = "debug-session", runId = "run1", hypothesisId = "B", location = "AuthService.cs:404", message = "SendOtpEmailAsync called", data = new { userId = user.Id, email = user.Email }, timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() }) + "\n"); } catch { }
-            // #endregion agent log
+
 
             // Tạo mã OTP 6 chữ số
             var random = new Random();
             var otpCode = random.Next(100000, 999999).ToString();
 
-            // #region agent log
-            try { System.IO.File.AppendAllText(@"d:\DauGia\.cursor\debug.log", System.Text.Json.JsonSerializer.Serialize(new { sessionId = "debug-session", runId = "run1", hypothesisId = "B", location = "AuthService.cs:410", message = "OTP code generated", data = new { otpCode = otpCode }, timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() }) + "\n"); } catch { }
-            // #endregion agent log
+
 
             // Hash OTP bằng BCrypt
             var otpCodeHash = BCrypt.Net.BCrypt.HashPassword(otpCode);
@@ -579,16 +555,12 @@ namespace RealtimeAuction.Api.Services
 
             await _otpTokens.InsertOneAsync(otpToken);
 
-            // #region agent log
-            try { System.IO.File.AppendAllText(@"d:\DauGia\.cursor\debug.log", System.Text.Json.JsonSerializer.Serialize(new { sessionId = "debug-session", runId = "run1", hypothesisId = "B", location = "AuthService.cs:427", message = "OTP token saved, about to send email", data = new { }, timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() }) + "\n"); } catch { }
-            // #endregion agent log
+
 
             // Gửi email
             await _emailService.SendOtpEmailAsync(user.Email, user.FullName, otpCode);
             
-            // #region agent log
-            try { System.IO.File.AppendAllText(@"d:\DauGia\.cursor\debug.log", System.Text.Json.JsonSerializer.Serialize(new { sessionId = "debug-session", runId = "run1", hypothesisId = "B", location = "AuthService.cs:431", message = "SendOtpEmailAsync completed", data = new { }, timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() }) + "\n"); } catch { }
-            // #endregion agent log
+
 
             _logger.LogInformation("OTP sent to {Email}", user.Email);
         }

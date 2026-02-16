@@ -3,10 +3,10 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
 using RealtimeAuction.Api.Dtos.Bid;
 using RealtimeAuction.Api.Helpers;
+using RealtimeAuction.Api.Hubs;
 using RealtimeAuction.Api.Models;
 using RealtimeAuction.Api.Repositories;
 using RealtimeAuction.Api.Services;
-using RealtimeAuction.Api.Hubs;
 using System.Security.Claims;
 
 namespace RealtimeAuction.Api.Controllers;
@@ -48,11 +48,21 @@ public class BidController : ControllerBase
         try
         {
             var bids = await _bidRepository.GetByAuctionIdAsync(auctionId);
+            var auction = await _auctionRepository.GetByIdAsync(auctionId);
+            var auctionTitle = auction?.Title;
+
+            var userIds = bids.Select(b => b.UserId).Distinct().ToList();
+            var userTasks = userIds.ToDictionary(uid => uid, uid => _userRepository.GetByIdAsync(uid));
+            await Task.WhenAll(userTasks.Values);
+            var userMap = userTasks.ToDictionary(kvp => kvp.Key, kvp => kvp.Value.Result);
+
             var response = bids.Select(b => new BidResponseDto
             {
                 Id = b.Id ?? "",
                 AuctionId = b.AuctionId,
+                AuctionTitle = auctionTitle,
                 UserId = b.UserId,
+                UserName = userMap.TryGetValue(b.UserId, out var u) ? u?.FullName : null,
                 Amount = b.Amount,
                 Timestamp = b.Timestamp,
                 IsWinningBid = b.IsWinningBid,
@@ -84,10 +94,16 @@ public class BidController : ControllerBase
             }
 
             var bids = await _bidRepository.GetByUserIdAsync(userId);
+            var auctionIds = bids.Select(b => b.AuctionId).Distinct().ToList();
+            var auctionTasks = auctionIds.ToDictionary(aid => aid, aid => _auctionRepository.GetByIdAsync(aid));
+            await Task.WhenAll(auctionTasks.Values);
+            var auctionMap = auctionTasks.ToDictionary(kvp => kvp.Key, kvp => kvp.Value.Result);
+
             var response = bids.Select(b => new BidResponseDto
             {
                 Id = b.Id ?? "",
                 AuctionId = b.AuctionId,
+                AuctionTitle = auctionMap.TryGetValue(b.AuctionId, out var a) ? a?.Title : null,
                 UserId = b.UserId,
                 Amount = b.Amount,
                 Timestamp = b.Timestamp,
@@ -137,6 +153,9 @@ public class BidController : ControllerBase
             var user = await _userRepository.GetByIdAsync(userId);
             var userName = user?.FullName ?? "Anonymous";
 
+            // Get all bids for count
+            var allBids = await _bidRepository.GetByAuctionIdAsync(request.AuctionId);
+
             var response = new BidResponseDto
             {
                 Id = result.Bid?.Id ?? "",
@@ -153,9 +172,6 @@ public class BidController : ControllerBase
                 } : null,
                 CreatedAt = result.Bid?.CreatedAt ?? DateTime.UtcNow
             };
-
-            // Get all bids for count
-            var allBids = await _bidRepository.GetByAuctionIdAsync(request.AuctionId);
 
             // Broadcast new bid via SignalR
             await AuctionHub.NotifyNewBid(_hubContext, request.AuctionId, new
