@@ -173,14 +173,21 @@ public class BidController : ControllerBase
                 CreatedAt = result.Bid?.CreatedAt ?? DateTime.UtcNow
             };
 
-            // Broadcast new bid via SignalR
-            await AuctionHub.NotifyNewBid(_hubContext, request.AuctionId, new
+            // Broadcast new bid via SignalR (do not fail HTTP 201 if broadcast fails)
+            try
             {
-                Bid = response,
-                AuctionId = request.AuctionId,
-                CurrentPrice = request.Amount,
-                BidCount = allBids.Count
-            });
+                await AuctionHub.NotifyNewBid(_hubContext, request.AuctionId, new
+                {
+                    Bid = response,
+                    AuctionId = request.AuctionId,
+                    CurrentPrice = request.Amount,
+                    BidCount = allBids.Count
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "SignalR NotifyNewBid failed for auction {AuctionId}", request.AuctionId);
+            }
 
             // Notify previous winning bidder that they've been outbid
             if (result.OutbidUserId != null)
@@ -194,14 +201,21 @@ public class BidController : ControllerBase
 
                 if (outbidBid != null)
                 {
-                    await AuctionHub.NotifyUserOutbid(_hubContext, result.OutbidUserId, new
+                    try
                     {
-                        AuctionId = request.AuctionId,
-                        AuctionTitle = auction.Title,
-                        YourBid = outbidBid.Amount,
-                        NewBid = request.Amount,
-                        BidderName = userName
-                    });
+                        await AuctionHub.NotifyUserOutbid(_hubContext, result.OutbidUserId, new
+                        {
+                            AuctionId = request.AuctionId,
+                            AuctionTitle = auction.Title,
+                            YourBid = outbidBid.Amount,
+                            NewBid = request.Amount,
+                            BidderName = userName
+                        });
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "SignalR NotifyUserOutbid failed for user {UserId}", result.OutbidUserId);
+                    }
 
                     // Send outbid email notification
                     if (outbidUser != null && !string.IsNullOrEmpty(outbidUser.Email))
