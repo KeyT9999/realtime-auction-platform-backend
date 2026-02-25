@@ -12,7 +12,7 @@ public class UserRepository : IUserRepository
     {
         var client = new MongoClient(mongoDbSettings.ConnectionString);
         var database = client.GetDatabase(mongoDbSettings.DatabaseName);
-        _users = database.GetCollection<User>("users");
+        _users = database.GetCollection<User>("Users");
     }
 
     public async Task<User?> GetByIdAsync(string id)

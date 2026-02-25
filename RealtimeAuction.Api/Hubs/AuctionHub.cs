@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using Microsoft.AspNetCore.SignalR;
 using System.Collections.Concurrent;
 
@@ -8,7 +9,7 @@ public class AuctionHub : Hub
     // Track viewers in each auction room: AuctionId -> HashSet<ConnectionId>
     private static readonly ConcurrentDictionary<string, HashSet<string>> _auctionViewers = new();
     
-    // Track user connections: ConnectionId -> UserId
+    // Track user connections: ConnectionId -> UserId (NameIdentifier for NotifyUserOutbid)
     private static readonly ConcurrentDictionary<string, string?> _userConnections = new();
     
     // Track which auction each connection is viewing: ConnectionId -> AuctionId
@@ -16,7 +17,7 @@ public class AuctionHub : Hub
 
     public override async Task OnConnectedAsync()
     {
-        var userId = Context.User?.Identity?.Name;
+        var userId = Context.User?.FindFirstValue(ClaimTypes.NameIdentifier);
         _userConnections.TryAdd(Context.ConnectionId, userId);
         await base.OnConnectedAsync();
     }
