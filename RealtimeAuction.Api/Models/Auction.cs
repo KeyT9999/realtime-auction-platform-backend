@@ -43,6 +43,8 @@ public class Auction
 
     public List<string> Images { get; set; } = new(); // URLs to cloud storage
 
+    public float[]? ImageVector { get; set; } // Vector representing the primary image for similarity search
+
     [BsonRepresentation(BsonType.Decimal128)]
     public decimal BidIncrement { get; set; } // Minimum amount to increase bid
 

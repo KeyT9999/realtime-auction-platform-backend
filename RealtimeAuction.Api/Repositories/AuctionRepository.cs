@@ -211,4 +211,22 @@ public class AuctionRepository : IAuctionRepository
 
         return (items, totalCount);
     }
+
+    public async Task<List<Auction>> SearchSimilarAuctionsAsync(float[] queryVector, int limit = 5)
+    {
+        var pipeline = new MongoDB.Bson.BsonDocument[]
+        {
+            new MongoDB.Bson.BsonDocument("$vectorSearch", new MongoDB.Bson.BsonDocument
+            {
+                { "index", "vector_index" },
+                { "path", "ImageVector" },
+                { "queryVector", new MongoDB.Bson.BsonArray(queryVector) },
+                { "numCandidates", 100 },
+                { "limit", limit }
+            })
+        };
+
+        var result = await _auctions.Aggregate<Auction>(pipeline).ToListAsync();
+        return result;
+    }
 }

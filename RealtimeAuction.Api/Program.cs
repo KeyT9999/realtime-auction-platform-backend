@@ -284,6 +284,9 @@ builder.Services.AddScoped<IOrderService, OrderService>();
 builder.Services.AddScoped<IReviewService, ReviewService>();
 builder.Services.AddScoped<IWithdrawalService, WithdrawalService>();
 
+// Register Singleton
+builder.Services.AddSingleton<ImageVectorizerService>();
+
 // Configure PayOS
 builder.Services.Configure<PayOsSettings>(options =>
 {
