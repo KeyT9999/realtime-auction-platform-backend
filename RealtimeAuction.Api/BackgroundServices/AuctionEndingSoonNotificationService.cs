@@ -1,26 +1,37 @@
+using Microsoft.AspNetCore.SignalR;
+using Microsoft.Extensions.Options;
+using RealtimeAuction.Api.Hubs;
 using RealtimeAuction.Api.Models;
 using RealtimeAuction.Api.Models.Enums;
 using RealtimeAuction.Api.Repositories;
 using RealtimeAuction.Api.Services;
+using RealtimeAuction.Api.Settings;
 
 namespace RealtimeAuction.Api.BackgroundServices;
 
 /// <summary>
-/// Background service that sends email notifications to watchers when auctions are ending soon (< 1 hour).
+/// Ending soon: Realtime = SignalR to everyone currently viewing the auction page.
+/// Offline = email to watchlist users who are not viewing (if SendEmailWhenOffline is enabled).
 /// Runs every 15 minutes to check for auctions ending within the next hour.
 /// </summary>
 public class AuctionEndingSoonNotificationService : BackgroundService
 {
     private readonly IServiceProvider _serviceProvider;
+    private readonly IHubContext<AuctionHub> _hubContext;
+    private readonly NotificationSettings _notificationSettings;
     private readonly ILogger<AuctionEndingSoonNotificationService> _logger;
     private readonly TimeSpan _checkInterval = TimeSpan.FromMinutes(15);
     private readonly TimeSpan _endingSoonThreshold = TimeSpan.FromHours(1);
 
     public AuctionEndingSoonNotificationService(
         IServiceProvider serviceProvider,
+        IHubContext<AuctionHub> hubContext,
+        IOptions<NotificationSettings> notificationSettings,
         ILogger<AuctionEndingSoonNotificationService> logger)
     {
         _serviceProvider = serviceProvider;
+        _hubContext = hubContext;
+        _notificationSettings = notificationSettings?.Value ?? new NotificationSettings();
         _logger = logger;
     }
 
@@ -71,7 +82,23 @@ public class AuctionEndingSoonNotificationService : BackgroundService
         {
             try
             {
-                await SendEndingSoonEmailsForAuctionAsync(
+                // 1) Realtime: notify everyone currently viewing this auction page (SignalR only)
+                var timeRemaining = auction.EndTime - DateTime.UtcNow;
+                var timeRemainingStr = FormatTimeRemaining(timeRemaining);
+                var currentPriceStr = FormatCurrency(auction.CurrentPrice);
+                var auctionUrl = $"http://localhost:5173/auctions/{auction.Id}";
+                await AuctionHub.NotifyEndingSoon(_hubContext, auction.Id!, new
+                {
+                    AuctionId = auction.Id,
+                    AuctionTitle = auction.Title,
+                    EndTime = auction.EndTime,
+                    TimeRemaining = timeRemainingStr,
+                    CurrentPrice = currentPriceStr,
+                    AuctionUrl = auctionUrl
+                });
+
+                // 2) Offline: send email to watchlist users who are NOT currently viewing (if email enabled)
+                await SendEndingSoonEmailsForOfflineWatchersAsync(
                     auction,
                     watchlistRepository,
                     userRepository,
@@ -79,28 +106,30 @@ public class AuctionEndingSoonNotificationService : BackgroundService
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error sending ending soon emails for auction {AuctionId}", auction.Id);
+                _logger.LogError(ex, "Error sending ending soon for auction {AuctionId}", auction.Id);
             }
         }
     }
 
-    private async Task SendEndingSoonEmailsForAuctionAsync(
+    /// <summary>
+    /// Send ending-soon email only to watchlist users who are offline (not currently viewing the auction).
+    /// Realtime notification already sent via SignalR to all viewers.
+    /// </summary>
+    private async Task SendEndingSoonEmailsForOfflineWatchersAsync(
         Auction auction,
         IWatchlistRepository watchlistRepository,
         IUserRepository userRepository,
         IEmailService emailService)
     {
-        // Get all watchers for this auction
+        if (!_notificationSettings.SendEmailWhenOffline)
+            return;
+
         var watchlists = await watchlistRepository.GetByAuctionIdAsync(auction.Id!);
         var unsent = watchlists.Where(w => !w.EndingSoonEmailSent).ToList();
+        if (!unsent.Any()) return;
 
-        if (!unsent.Any())
-        {
-            return;
-        }
-
-        _logger.LogInformation("Sending ending soon emails to {Count} watchers for auction {AuctionId}", 
-            unsent.Count, auction.Id);
+        // Users currently viewing this auction already got SignalR; only email those offline
+        var viewerUserIds = new HashSet<string>(AuctionHub.GetViewerUserIds(auction.Id!), StringComparer.Ordinal);
 
         var timeRemaining = auction.EndTime - DateTime.UtcNow;
         var timeRemainingStr = FormatTimeRemaining(timeRemaining);
@@ -109,15 +138,15 @@ public class AuctionEndingSoonNotificationService : BackgroundService
 
         foreach (var watchlist in unsent)
         {
+            if (viewerUserIds.Contains(watchlist.UserId))
+                continue; // already notified via SignalR
+
             try
             {
                 var user = await userRepository.GetByIdAsync(watchlist.UserId);
                 if (user == null || string.IsNullOrEmpty(user.Email))
-                {
                     continue;
-                }
 
-                // Send email
                 await emailService.SendAuctionEndingSoonEmailAsync(
                     user.Email,
                     user.FullName,
@@ -126,13 +155,11 @@ public class AuctionEndingSoonNotificationService : BackgroundService
                     currentPriceStr,
                     auctionUrl);
 
-                // Mark as sent - need to update the watchlist
                 watchlist.EndingSoonEmailSent = true;
                 watchlist.EndingSoonEmailSentAt = DateTime.UtcNow;
-                
-                // Note: We need an update method in the repository
-                // For now, we'll just log that we sent the email
-                _logger.LogInformation("Sent ending soon email to {Email} for auction {AuctionId}", 
+                await watchlistRepository.UpdateAsync(watchlist);
+
+                _logger.LogInformation("Sent ending soon email to {Email} for auction {AuctionId} (user offline)",
                     user.Email, auction.Id);
             }
             catch (Exception ex)

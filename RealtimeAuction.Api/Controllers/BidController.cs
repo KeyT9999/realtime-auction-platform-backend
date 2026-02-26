@@ -1,12 +1,14 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
+using Microsoft.Extensions.Options;
 using RealtimeAuction.Api.Dtos.Bid;
 using RealtimeAuction.Api.Helpers;
 using RealtimeAuction.Api.Hubs;
 using RealtimeAuction.Api.Models;
 using RealtimeAuction.Api.Repositories;
 using RealtimeAuction.Api.Services;
+using RealtimeAuction.Api.Settings;
 using System.Security.Claims;
 
 namespace RealtimeAuction.Api.Controllers;
@@ -22,6 +24,7 @@ public class BidController : ControllerBase
     private readonly IBidService _bidService;
     private readonly IHubContext<AuctionHub> _hubContext;
     private readonly IEmailService _emailService;
+    private readonly NotificationSettings _notificationSettings;
     private readonly ILogger<BidController> _logger;
 
     public BidController(
@@ -31,6 +34,7 @@ public class BidController : ControllerBase
         IBidService bidService,
         IHubContext<AuctionHub> hubContext,
         IEmailService emailService,
+        IOptions<NotificationSettings> notificationSettings,
         ILogger<BidController> logger)
     {
         _bidRepository = bidRepository;
@@ -39,6 +43,7 @@ public class BidController : ControllerBase
         _bidService = bidService;
         _hubContext = hubContext;
         _emailService = emailService;
+        _notificationSettings = notificationSettings?.Value ?? new NotificationSettings();
         _logger = logger;
     }
 
@@ -217,8 +222,10 @@ public class BidController : ControllerBase
                         _logger.LogError(ex, "SignalR NotifyUserOutbid failed for user {UserId}", result.OutbidUserId);
                     }
 
-                    // Send outbid email notification
-                    if (outbidUser != null && !string.IsNullOrEmpty(outbidUser.Email))
+                    // Realtime = SignalR only. When user is offline, send email if email notifications are enabled.
+                    var outbidUserIsOnline = AuctionHub.IsUserConnected(result.OutbidUserId);
+                    if (outbidUser != null && !string.IsNullOrEmpty(outbidUser.Email)
+                        && !outbidUserIsOnline && _notificationSettings.SendEmailWhenOffline)
                     {
                         try
                         {
@@ -234,7 +241,7 @@ public class BidController : ControllerBase
                                 FormatCurrency(suggestedBid),
                                 auctionUrl);
                             
-                            _logger.LogInformation("Sent outbid email to {Email}", outbidUser.Email);
+                            _logger.LogInformation("Sent outbid email to {Email} (user offline)", outbidUser.Email);
                         }
                         catch (Exception emailEx)
                         {

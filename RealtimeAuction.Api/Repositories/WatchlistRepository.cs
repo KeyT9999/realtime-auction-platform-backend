@@ -24,6 +24,14 @@ public class WatchlistRepository : IWatchlistRepository
         return watchlist;
     }
 
+    public async Task<Watchlist> UpdateAsync(Watchlist watchlist)
+    {
+        if (string.IsNullOrEmpty(watchlist.Id))
+            throw new ArgumentException("Watchlist Id is required for update.", nameof(watchlist));
+        await _watchlists.ReplaceOneAsync(w => w.Id == watchlist.Id, watchlist);
+        return watchlist;
+    }
+
     public async Task<bool> RemoveAsync(string id)
     {
         var result = await _watchlists.DeleteOneAsync(w => w.Id == id);
