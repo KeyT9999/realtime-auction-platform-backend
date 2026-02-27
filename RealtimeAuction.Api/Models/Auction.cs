@@ -4,6 +4,7 @@ using RealtimeAuction.Api.Models.Enums;
 
 namespace RealtimeAuction.Api.Models;
 
+[BsonIgnoreExtraElements]
 public class Auction
 {
     [BsonId]

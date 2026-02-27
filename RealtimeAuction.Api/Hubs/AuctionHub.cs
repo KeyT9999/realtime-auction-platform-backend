@@ -218,4 +218,42 @@ public class AuctionHub : Hub
     {
         return _auctionViewers.TryGetValue(auctionId, out var viewers) ? viewers.Count : 0;
     }
+
+    /// <summary>
+    /// Returns true if the user has at least one active SignalR connection (online).
+    /// Used to decide whether to send email fallback (e.g. outbid notification).
+    /// </summary>
+    public static bool IsUserConnected(string? userId)
+    {
+        if (string.IsNullOrEmpty(userId)) return false;
+        return _userConnections.Values.Any(uid => string.Equals(uid, userId, StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// Returns user IDs of all clients currently viewing this auction (in the auction group).
+    /// Used to send "ending soon" only via SignalR to viewers; email goes to watchlist users not in this set.
+    /// </summary>
+    public static IReadOnlyList<string> GetViewerUserIds(string auctionId)
+    {
+        if (string.IsNullOrWhiteSpace(auctionId)) return Array.Empty<string>();
+        if (!_auctionViewers.TryGetValue(auctionId, out var connectionIds) || connectionIds == null)
+            return Array.Empty<string>();
+
+        var userIds = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var cid in connectionIds)
+        {
+            if (_userConnections.TryGetValue(cid, out var uid) && !string.IsNullOrEmpty(uid))
+                userIds.Add(uid);
+        }
+        return userIds.ToList();
+    }
+
+    /// <summary>
+    /// Notify everyone currently viewing the auction page that it is ending soon (e.g. &lt; 1 hour).
+    /// Realtime only; offline users get ending-soon via email (handled by background service).
+    /// </summary>
+    public static async Task NotifyEndingSoon(IHubContext<AuctionHub> hubContext, string auctionId, object payload)
+    {
+        await hubContext.Clients.Group(GroupNames.Auction(auctionId)).SendAsync("EndingSoon", payload);
+    }
 }

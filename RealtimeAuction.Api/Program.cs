@@ -249,6 +249,15 @@ builder.Services.Configure<EmailSettings>(options =>
     options.ReplyTo = emailSettings.ReplyTo;
 });
 
+// Notifications: Realtime = SignalR; offline = email when SendEmailWhenOffline is true
+var sendEmailWhenOffline = Environment.GetEnvironmentVariable("NOTIFICATIONS_SEND_EMAIL_WHEN_OFFLINE");
+builder.Services.Configure<NotificationSettings>(options =>
+{
+    options.SendEmailWhenOffline = sendEmailWhenOffline != null
+        ? string.Equals(sendEmailWhenOffline, "true", StringComparison.OrdinalIgnoreCase) || sendEmailWhenOffline == "1"
+        : (builder.Configuration.GetValue<bool?>("Notifications:SendEmailWhenOffline") ?? true);
+});
+
 // Register MongoDB Database
 builder.Services.AddSingleton<IMongoDatabase>(serviceProvider =>
 {
