@@ -27,4 +27,6 @@ public interface IAuctionRepository
         string sortOrder,
         int page,
         int pageSize);
+
+    Task<List<Auction>> SearchSimilarAuctionsAsync(float[] queryVector, int limit = 5);
 }
