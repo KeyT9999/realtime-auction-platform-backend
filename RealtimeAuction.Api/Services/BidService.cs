@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using RealtimeAuction.Api.Dtos.Bid;
 using RealtimeAuction.Api.Models;
 using RealtimeAuction.Api.Models.Enums;
@@ -7,12 +8,19 @@ namespace RealtimeAuction.Api.Services;
 
 public class BidService : IBidService
 {
+    private static readonly ConcurrentDictionary<string, SemaphoreSlim> _auctionLocks = new();
+
     private readonly IBidRepository _bidRepository;
     private readonly IAuctionRepository _auctionRepository;
     private readonly IUserRepository _userRepository;
     private readonly ITransactionRepository _transactionRepository;
     private readonly IEmailService _emailService;
     private readonly ILogger<BidService> _logger;
+
+    private static SemaphoreSlim GetAuctionLock(string auctionId)
+    {
+        return _auctionLocks.GetOrAdd(auctionId, _ => new SemaphoreSlim(1, 1));
+    }
 
     public BidService(
         IBidRepository bidRepository,
@@ -32,13 +40,31 @@ public class BidService : IBidService
 
     public async Task<BidResult> PlaceBidAsync(string userId, CreateBidDto request)
     {
-        var user = await _userRepository.GetByIdAsync(userId);
+        var semaphore = GetAuctionLock(request.AuctionId);
+        await semaphore.WaitAsync();
+        try
+        {
+            return await PlaceBidCoreAsync(userId, request);
+        }
+        finally
+        {
+            semaphore.Release();
+        }
+    }
+
+    private async Task<BidResult> PlaceBidCoreAsync(string userId, CreateBidDto request)
+    {
+        var userTask = _userRepository.GetByIdAsync(userId);
+        var auctionTask = _auctionRepository.GetByIdAsync(request.AuctionId);
+        await Task.WhenAll(userTask, auctionTask);
+        var user = userTask.Result;
+        var auction = auctionTask.Result;
+
         if (user == null)
         {
             return new BidResult { Success = false, ErrorMessage = "Người dùng không tồn tại" };
         }
 
-        var auction = await _auctionRepository.GetByIdAsync(request.AuctionId);
         if (auction == null)
         {
             return new BidResult { Success = false, ErrorMessage = "Phiên đấu giá không tồn tại" };
