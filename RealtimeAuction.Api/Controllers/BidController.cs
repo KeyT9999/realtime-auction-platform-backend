@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
@@ -18,6 +19,9 @@ namespace RealtimeAuction.Api.Controllers;
 [Authorize]
 public class BidController : ControllerBase
 {
+    private const int BidThrottleSeconds = 2;
+    private static readonly ConcurrentDictionary<string, DateTime> _lastBidTimeByUserAuction = new();
+
     private readonly IBidRepository _bidRepository;
     private readonly IAuctionRepository _auctionRepository;
     private readonly IUserRepository _userRepository;
@@ -139,6 +143,14 @@ public class BidController : ControllerBase
             {
                 return Unauthorized(new { message = "User not authenticated" });
             }
+
+            var throttleKey = $"{userId}|{request.AuctionId}";
+            var now = DateTime.UtcNow;
+            if (_lastBidTimeByUserAuction.TryGetValue(throttleKey, out var last) && (now - last).TotalSeconds < BidThrottleSeconds)
+            {
+                return StatusCode(429, new { message = $"Vui lòng đợi {BidThrottleSeconds} giây trước khi đặt giá tiếp." });
+            }
+            _lastBidTimeByUserAuction[throttleKey] = now;
 
             // Sử dụng BidService để xử lý logic hold balance
             var result = await _bidService.PlaceBidAsync(userId, request);

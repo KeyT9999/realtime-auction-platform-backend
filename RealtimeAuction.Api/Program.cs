@@ -353,8 +353,9 @@ builder.Services.AddAuthorization(options =>
     });
 });
 
-// Add Controllers
-builder.Services.AddControllers();
+// Add Controllers - JSON camelCase for frontend
+builder.Services.AddControllers()
+    .AddJsonOptions(o => o.JsonSerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase);
 
 // Add Background Services
 builder.Services.AddHostedService<RealtimeAuction.Api.BackgroundServices.AuctionEndBackgroundService>();
@@ -379,11 +380,16 @@ builder.Services.AddCors(options =>
 
 var app = builder.Build();
 
-// Seed categories on startup
+// Seed categories and ensure indexes on startup
 using (var scope = app.Services.CreateScope())
 {
     var database = scope.ServiceProvider.GetRequiredService<IMongoDatabase>();
     await SeedCategories.SeedAsync(database);
+    var bids = database.GetCollection<RealtimeAuction.Api.Models.Bid>("Bids");
+    var indexKeys = Builders<RealtimeAuction.Api.Models.Bid>.IndexKeys
+        .Descending(b => b.AuctionId)
+        .Descending(b => b.Amount);
+    await bids.Indexes.CreateOneAsync(new CreateIndexModel<RealtimeAuction.Api.Models.Bid>(indexKeys));
 }
 
 // Configure the HTTP request pipeline.

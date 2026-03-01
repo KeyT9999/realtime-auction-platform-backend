@@ -72,7 +72,8 @@ public class AuctionRepository : IAuctionRepository
     {
         var update = Builders<Auction>.Update
             .Set(a => a.CurrentPrice, newPrice)
-            .Set(a => a.UpdatedAt, DateTime.UtcNow);
+            .Set(a => a.UpdatedAt, DateTime.UtcNow)
+            .Inc(a => a.BidCount, 1);
 
         await _auctions.UpdateOneAsync(a => a.Id == auctionId, update);
         
