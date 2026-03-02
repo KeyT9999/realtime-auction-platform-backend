@@ -4,6 +4,7 @@ using RealtimeAuction.Api.Models.Enums;
 
 namespace RealtimeAuction.Api.Models;
 
+[BsonIgnoreExtraElements]
 public class Auction
 {
     [BsonId]
@@ -42,8 +43,6 @@ public class Auction
     public string ProductId { get; set; } = null!; // Reference to Product (one-to-one relationship)
 
     public List<string> Images { get; set; } = new(); // URLs to cloud storage
-
-    public float[]? ImageVector { get; set; } // Vector representing the primary image for similarity search
 
     [BsonRepresentation(BsonType.Decimal128)]
     public decimal BidIncrement { get; set; } // Minimum amount to increase bid

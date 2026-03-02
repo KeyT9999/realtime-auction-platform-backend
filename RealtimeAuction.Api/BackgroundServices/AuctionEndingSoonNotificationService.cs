@@ -39,7 +39,14 @@ public class AuctionEndingSoonNotificationService : BackgroundService
                 _logger.LogError(ex, "Error in AuctionEndingSoonNotificationService");
             }
 
+            try
+        {
             await Task.Delay(_checkInterval, stoppingToken);
+        }
+        catch (TaskCanceledException)
+        {
+            // Graceful exit when application is stopping
+        }
         }
 
         _logger.LogInformation("AuctionEndingSoonNotificationService stopped");

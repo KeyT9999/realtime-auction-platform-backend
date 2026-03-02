@@ -40,7 +40,14 @@ public class TransactionReminderService : BackgroundService
                 _logger.LogError(ex, "Error in TransactionReminderService");
             }
 
+            try
+        {
             await Task.Delay(_checkInterval, stoppingToken);
+        }
+        catch (TaskCanceledException)
+        {
+            // Graceful exit when application is stopping
+        }
         }
 
         _logger.LogInformation("TransactionReminderService stopped");

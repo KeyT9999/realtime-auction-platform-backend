@@ -36,7 +36,14 @@ public class AuctionEndBackgroundService : BackgroundService
                 _logger.LogError(ex, "Error in AuctionEndBackgroundService");
             }
 
+            try
+        {
             await Task.Delay(_checkInterval, stoppingToken);
+        }
+        catch (TaskCanceledException)
+        {
+            // Graceful exit when application is stopping
+        }
         }
 
         _logger.LogInformation("AuctionEndBackgroundService stopped");

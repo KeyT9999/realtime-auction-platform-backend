@@ -40,7 +40,14 @@ public class WithdrawalReminderService : BackgroundService
                 _logger.LogError(ex, "Error in WithdrawalReminderService");
             }
 
+            try
+        {
             await Task.Delay(_checkInterval, stoppingToken);
+        }
+        catch (TaskCanceledException)
+        {
+            // Graceful exit when application is stopping
+        }
         }
 
         _logger.LogInformation("WithdrawalReminderService stopped");
