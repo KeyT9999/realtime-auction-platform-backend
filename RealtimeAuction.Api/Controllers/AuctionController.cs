@@ -1,6 +1,8 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
+using MongoDB.Bson;
+using MongoDB.Driver;
 using RealtimeAuction.Api.Dtos.Auction;
 using RealtimeAuction.Api.Dtos.Bid;
 using RealtimeAuction.Api.Helpers;
@@ -27,7 +29,6 @@ public class AuctionController : ControllerBase
     private readonly ITransactionRepository _transactionRepository;
     private readonly IEmailService _emailService;
     private readonly IHubContext<AuctionHub> _hubContext;
-    private readonly ImageVectorizerService _imageVectorizerService;
     private readonly ILogger<AuctionController> _logger;
 
     public AuctionController(
@@ -40,7 +41,6 @@ public class AuctionController : ControllerBase
         ITransactionRepository transactionRepository,
         IEmailService emailService,
         IHubContext<AuctionHub> hubContext,
-        ImageVectorizerService imageVectorizerService,
         ILogger<AuctionController> logger)
     {
         _auctionRepository = auctionRepository;
@@ -52,7 +52,6 @@ public class AuctionController : ControllerBase
         _transactionRepository = transactionRepository;
         _emailService = emailService;
         _hubContext = hubContext;
-        _imageVectorizerService = imageVectorizerService;
         _logger = logger;
     }
 
@@ -138,37 +137,6 @@ public class AuctionController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error getting auctions");
-            return BadRequest(new { message = ex.Message });
-        }
-    }
-
-    [HttpPost("search-by-image")]
-    [AllowAnonymous]
-    public async Task<IActionResult> SearchByImage(IFormFile file, [FromQuery] int limit = 5)
-    {
-        try
-        {
-            if (file == null || file.Length == 0)
-            {
-                return BadRequest(new { message = "No image file provided" });
-            }
-
-            using var memoryStream = new MemoryStream();
-            await file.CopyToAsync(memoryStream);
-            var imageBytes = memoryStream.ToArray();
-
-            // Extract vector
-            var queryVector = _imageVectorizerService.GetVectorFromImageBytes(imageBytes);
-
-            // Search MongoDB
-            var similarAuctions = await _auctionRepository.SearchSimilarAuctionsAsync(queryVector, limit);
-
-            var response = await MapToResponseDtos(similarAuctions);
-            return Ok(response);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error during image similarity search");
             return BadRequest(new { message = ex.Message });
         }
     }
@@ -296,22 +264,6 @@ public class AuctionController : ControllerBase
                 AutoExtendDuration = request.AutoExtendDuration,
                 BuyoutPrice = request.BuyoutPrice
             };
-
-            // Extract Image Vector from the primary image
-            if (auction.Images.Any())
-            {
-                try
-                {
-                    using var httpClient = new HttpClient();
-                    // Download the first image directly from Cloudinary URL
-                    var imageBytes = await httpClient.GetByteArrayAsync(auction.Images.First());
-                    auction.ImageVector = _imageVectorizerService.GetVectorFromImageBytes(imageBytes);
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogWarning(ex, "Failed to extract image vector for auction {Title}", auction.Title);
-                }
-            }
 
             var created = await _auctionRepository.CreateAsync(auction);
             var response = await MapToResponseDto(created);

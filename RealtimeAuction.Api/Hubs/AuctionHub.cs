@@ -134,6 +134,28 @@ public class AuctionHub : Hub
         _connectionAuctions.TryRemove(Context.ConnectionId, out _);
     }
 
+    // Public chat message (ephemeral, realtime only)
+    public async Task SendAuctionChatMessage(string auctionId, string message)
+    {
+        if (string.IsNullOrWhiteSpace(auctionId) || string.IsNullOrWhiteSpace(message))
+            return;
+
+        var userId = Context.User?.FindFirstValue(ClaimTypes.NameIdentifier);
+        var displayName =
+            Context.User?.FindFirstValue(ClaimTypes.Name) ??
+            Context.User?.FindFirstValue(ClaimTypes.GivenName) ??
+            Context.User?.Identity?.Name;
+
+        await Clients.Group(GroupNames.Auction(auctionId)).SendAsync("AuctionChatMessage", new
+        {
+            AuctionId = auctionId,
+            UserId = userId ?? "guest",
+            UserName = string.IsNullOrWhiteSpace(displayName) ? "Ẩn danh" : displayName,
+            Text = message.Trim(),
+            SentAt = DateTimeOffset.UtcNow
+        });
+    }
+
     // Called from BidController when a new bid is placed
     public static async Task NotifyNewBid(IHubContext<AuctionHub> hubContext, string auctionId, object bidData)
     {
