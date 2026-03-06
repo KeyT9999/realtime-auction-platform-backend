@@ -83,6 +83,8 @@ public class AdminService : IAdminService
             LockedReason = u.LockedReason,
             Phone = u.Phone,
             Address = u.Address,
+            AvailableBalance = u.AvailableBalance,
+            EscrowBalance = u.EscrowBalance,
             CreatedAt = u.CreatedAt,
             UpdatedAt = u.UpdatedAt
         }).ToList();
@@ -114,6 +116,8 @@ public class AdminService : IAdminService
             LockedReason = user.LockedReason,
             Phone = user.Phone,
             Address = user.Address,
+            AvailableBalance = user.AvailableBalance,
+            EscrowBalance = user.EscrowBalance,
             CreatedAt = user.CreatedAt,
             UpdatedAt = user.UpdatedAt
         };
@@ -169,6 +173,8 @@ public class AdminService : IAdminService
             IsLocked = user.IsLocked,
             Phone = user.Phone,
             Address = user.Address,
+            AvailableBalance = user.AvailableBalance,
+            EscrowBalance = user.EscrowBalance,
             CreatedAt = user.CreatedAt,
             UpdatedAt = user.UpdatedAt
         };
@@ -213,6 +219,8 @@ public class AdminService : IAdminService
             LockedReason = user.LockedReason,
             Phone = user.Phone,
             Address = user.Address,
+            AvailableBalance = user.AvailableBalance,
+            EscrowBalance = user.EscrowBalance,
             CreatedAt = user.CreatedAt,
             UpdatedAt = user.UpdatedAt
         };
@@ -277,6 +285,8 @@ public class AdminService : IAdminService
             LockedReason = user.LockedReason,
             Phone = user.Phone,
             Address = user.Address,
+            AvailableBalance = user.AvailableBalance,
+            EscrowBalance = user.EscrowBalance,
             CreatedAt = user.CreatedAt,
             UpdatedAt = user.UpdatedAt
         };
@@ -316,6 +326,8 @@ public class AdminService : IAdminService
             LockedReason = user.LockedReason,
             Phone = user.Phone,
             Address = user.Address,
+            AvailableBalance = user.AvailableBalance,
+            EscrowBalance = user.EscrowBalance,
             CreatedAt = user.CreatedAt,
             UpdatedAt = user.UpdatedAt
         };
@@ -353,6 +365,8 @@ public class AdminService : IAdminService
             LockedReason = user.LockedReason,
             Phone = user.Phone,
             Address = user.Address,
+            AvailableBalance = user.AvailableBalance,
+            EscrowBalance = user.EscrowBalance,
             CreatedAt = user.CreatedAt,
             UpdatedAt = user.UpdatedAt
         };

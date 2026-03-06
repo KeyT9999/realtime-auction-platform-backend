@@ -23,4 +23,9 @@ public interface IPaymentService
     /// Verify signature từ PayOS
     /// </summary>
     bool VerifySignature(string data, string signature);
+    
+    /// <summary>
+    /// Verify webhook payload signature from PayOS
+    /// </summary>
+    bool VerifyWebhookSignature(PayOsWebhookPayload payload);
 }

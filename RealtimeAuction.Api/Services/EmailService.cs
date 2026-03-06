@@ -12,11 +12,13 @@ public class EmailService : IEmailService
 {
     private readonly EmailSettings _emailSettings;
     private readonly ILogger<EmailService> _logger;
+    private readonly IConfiguration _configuration;
 
-    public EmailService(IOptions<EmailSettings> emailSettings, ILogger<EmailService> logger)
+    public EmailService(IOptions<EmailSettings> emailSettings, ILogger<EmailService> logger, IConfiguration configuration)
     {
         _emailSettings = emailSettings.Value;
         _logger = logger;
+        _configuration = configuration;
     }
 
     public async Task SendEmailAsync(string toEmail, string toName, string subject, string htmlContent)
@@ -191,6 +193,7 @@ public class EmailService : IEmailService
         var htmlContent = await File.ReadAllTextAsync(templatePath);
         
         htmlContent = htmlContent.Replace("{{UserName}}", toName);
+        htmlContent = htmlContent.Replace("{{PlatformUrl}}", _configuration["FrontendUrl"] ?? "http://localhost:5173");
         
         await SendEmailAsync(toEmail, toName, "Welcome to Realtime Auction Platform", htmlContent);
     }
@@ -297,6 +300,7 @@ public class EmailService : IEmailService
         htmlContent = htmlContent.Replace("{{AuctionTitle}}", auctionTitle);
         htmlContent = htmlContent.Replace("{{FinalAmount}}", finalAmount);
         htmlContent = htmlContent.Replace("{{TransactionDate}}", transactionDate);
+        htmlContent = htmlContent.Replace("{{PlatformUrl}}", _configuration["FrontendUrl"] ?? "http://localhost:5173");
         
         await SendEmailAsync(toEmail, toName, $"🎉 Giao dịch hoàn tất: {auctionTitle}", htmlContent);
     }
