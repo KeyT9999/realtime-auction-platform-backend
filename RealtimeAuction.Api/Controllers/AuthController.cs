@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using RealtimeAuction.Api.Dtos.Auth;
 using RealtimeAuction.Api.Services;
 using System.Security.Authentication;
@@ -22,6 +23,7 @@ namespace RealtimeAuction.Api.Controllers
         }
 
         [HttpPost("register")]
+        [EnableRateLimiting("auth")]
         public async Task<IActionResult> Register([FromBody] RegisterRequest request)
         {
             try
@@ -36,6 +38,7 @@ namespace RealtimeAuction.Api.Controllers
         }
 
         [HttpPost("login")]
+        [EnableRateLimiting("auth")]
         public async Task<IActionResult> Login([FromBody] LoginRequest request)
         {
             try
@@ -66,6 +69,7 @@ namespace RealtimeAuction.Api.Controllers
         }
         
         [HttpPost("google-login")]
+        [EnableRateLimiting("auth")]
         public async Task<IActionResult> GoogleLogin([FromBody] GoogleLoginRequest request)
         {
             try
@@ -136,6 +140,7 @@ namespace RealtimeAuction.Api.Controllers
         }
 
         [HttpPost("forgot-password")]
+        [EnableRateLimiting("auth-strict")]
         public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordRequest request)
         {
             try
@@ -188,6 +193,7 @@ namespace RealtimeAuction.Api.Controllers
         }
 
         [HttpPost("resend-password-reset-otp")]
+        [EnableRateLimiting("auth-strict")]
         public async Task<IActionResult> ResendPasswordResetOtp([FromBody] ForgotPasswordRequest request)
         {
             try
@@ -238,6 +244,7 @@ namespace RealtimeAuction.Api.Controllers
         }
 
         [HttpPost("resend-verification")]
+        [EnableRateLimiting("auth-strict")]
         public async Task<IActionResult> ResendVerification([FromBody] ResendVerificationRequest request)
         {
             try

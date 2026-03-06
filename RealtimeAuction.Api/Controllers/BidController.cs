@@ -30,6 +30,7 @@ public class BidController : ControllerBase
     private readonly IEmailService _emailService;
     private readonly NotificationSettings _notificationSettings;
     private readonly ILogger<BidController> _logger;
+    private readonly IConfiguration _configuration;
 
     public BidController(
         IBidRepository bidRepository,
@@ -39,7 +40,8 @@ public class BidController : ControllerBase
         IHubContext<AuctionHub> hubContext,
         IEmailService emailService,
         IOptions<NotificationSettings> notificationSettings,
-        ILogger<BidController> logger)
+        ILogger<BidController> logger,
+        IConfiguration configuration)
     {
         _bidRepository = bidRepository;
         _auctionRepository = auctionRepository;
@@ -49,6 +51,7 @@ public class BidController : ControllerBase
         _emailService = emailService;
         _notificationSettings = notificationSettings?.Value ?? new NotificationSettings();
         _logger = logger;
+        _configuration = configuration;
     }
 
     [HttpGet("auction/{auctionId}")]
@@ -246,7 +249,7 @@ public class BidController : ControllerBase
                         try
                         {
                             var suggestedBid = request.Amount + (auction.BidIncrement > 0 ? auction.BidIncrement : 10000);
-                            var auctionUrl = $"http://localhost:5173/auctions/{auction.Id}";
+                            var auctionUrl = $"{_configuration["FrontendUrl"]}/auctions/{auction.Id}";
                             
                             await _emailService.SendOutbidNotificationEmailAsync(
                                 outbidUser.Email,

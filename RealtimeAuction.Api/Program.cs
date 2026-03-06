@@ -1,4 +1,6 @@
 using System.Text;
+using System.Threading.RateLimiting;
+using Microsoft.AspNetCore.RateLimiting;
 using DotNetEnv;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
@@ -10,6 +12,8 @@ using Microsoft.AspNetCore.Authentication.Google;
 using Microsoft.AspNetCore.SignalR;
 using RealtimeAuction.Api.Hubs;
 using System.Text.Json;
+using FluentValidation;
+using FluentValidation.AspNetCore;
 
 
 
@@ -105,6 +109,12 @@ var mongoDbSettings = new MongoDbSettings
         ?? "realtime-auction-platform"
 };
 
+// Configure FrontendUrl — used for CORS, email links, PayOS callbacks
+var frontendUrl = Environment.GetEnvironmentVariable("FRONTEND_URL")
+    ?? builder.Configuration["FrontendUrl"]
+    ?? "http://localhost:5173";
+builder.Configuration["FrontendUrl"] = frontendUrl;
+
 // Configure PayOS Settings
 var payOsSettings = new PayOsSettings
 {
@@ -119,10 +129,10 @@ var payOsSettings = new PayOsSettings
         ?? string.Empty,
     ReturnUrl = Environment.GetEnvironmentVariable("PAYOS_RETURN_URL") 
         ?? builder.Configuration["PayOS:ReturnUrl"] 
-        ?? "http://localhost:5173/payment/success",
+        ?? $"{frontendUrl}/payment/success",
     CancelUrl = Environment.GetEnvironmentVariable("PAYOS_CANCEL_URL") 
         ?? builder.Configuration["PayOS:CancelUrl"] 
-        ?? "http://localhost:5173/payment/cancel"
+        ?? $"{frontendUrl}/payment/cancel"
 };
 
 // Configure JWT Settings
@@ -130,7 +140,7 @@ var jwtSettings = new JwtSettings
 {
     Secret = Environment.GetEnvironmentVariable("JWT_SECRET_KEY") 
         ?? builder.Configuration["JWT:SecretKey"] 
-        ?? "your-super-secret-key-change-this-in-production-min-32-characters",
+        ?? "",
     Issuer = Environment.GetEnvironmentVariable("JWT_ISSUER") 
         ?? builder.Configuration["JWT:Issuer"] 
         ?? "realtime-auction-platform",
@@ -138,6 +148,22 @@ var jwtSettings = new JwtSettings
         ?? builder.Configuration["JWT:Audience"] 
         ?? "realtime-auction-platform"
 };
+
+// Validate JWT secret — fail fast if insecure
+if (string.IsNullOrWhiteSpace(jwtSettings.Secret) || jwtSettings.Secret.Contains("your-super-secret-key") || jwtSettings.Secret.Length < 32)
+{
+    if (!builder.Environment.IsDevelopment())
+    {
+        throw new InvalidOperationException(
+            "JWT SecretKey is missing or insecure. Set JWT_SECRET_KEY environment variable with a strong key (>= 32 characters).");
+    }
+    if (string.IsNullOrWhiteSpace(jwtSettings.Secret))
+    {
+        throw new InvalidOperationException(
+            "JWT SecretKey is not configured. Set it in appsettings.Development.json or JWT_SECRET_KEY environment variable.");
+    }
+    Console.WriteLine("[WARNING] JWT SecretKey may be insecure. Set JWT_SECRET_KEY env variable for production.");
+}
 
 // Configure Cloudinary Settings
 var cloudinarySettings = new CloudinarySettings
@@ -360,6 +386,10 @@ builder.Services.AddAuthorization(options =>
 builder.Services.AddControllers()
     .AddJsonOptions(o => o.JsonSerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase);
 
+// FluentValidation — auto-validate [FromBody] DTOs before controller action executes
+builder.Services.AddFluentValidationAutoValidation();
+builder.Services.AddValidatorsFromAssemblyContaining<Program>();
+
 // Add Background Services
 builder.Services.AddHostedService<RealtimeAuction.Api.BackgroundServices.AuctionEndBackgroundService>();
 builder.Services.AddHostedService<RealtimeAuction.Api.BackgroundServices.AuctionEndingSoonNotificationService>();
@@ -369,15 +399,48 @@ builder.Services.AddHostedService<RealtimeAuction.Api.BackgroundServices.Withdra
 // Add SignalR
 builder.Services.AddSignalR();
 
-// Add CORS
+// Add CORS — use configured FrontendUrl + dev fallback
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowReactApp", policy =>
     {
-        policy.WithOrigins("http://localhost:5173", "http://localhost:5174")
+        var origins = new List<string> { frontendUrl };
+        // Always allow dev ports as fallback
+        if (!origins.Contains("http://localhost:5173")) origins.Add("http://localhost:5173");
+        if (!origins.Contains("http://localhost:5174")) origins.Add("http://localhost:5174");
+        
+        policy.WithOrigins(origins.ToArray())
               .AllowAnyHeader()
               .AllowAnyMethod()
               .AllowCredentials();
+    });
+});
+
+// Health Checks — MongoDB connectivity
+builder.Services.AddHealthChecks()
+    .AddCheck<RealtimeAuction.Api.Helpers.MongoDbHealthCheck>("mongodb");
+
+// Add Rate Limiting — protect auth endpoints from brute-force
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    
+    // Policy for auth endpoints: 5 requests per minute per IP
+    options.AddFixedWindowLimiter("auth", opt =>
+    {
+        opt.PermitLimit = 5;
+        opt.Window = TimeSpan.FromMinutes(1);
+        opt.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
+        opt.QueueLimit = 0;
+    });
+    
+    // Stricter policy for sensitive endpoints: 3 requests per minute per IP
+    options.AddFixedWindowLimiter("auth-strict", opt =>
+    {
+        opt.PermitLimit = 3;
+        opt.Window = TimeSpan.FromMinutes(1);
+        opt.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
+        opt.QueueLimit = 0;
     });
 });
 
@@ -396,6 +459,10 @@ using (var scope = app.Services.CreateScope())
 }
 
 // Configure the HTTP request pipeline.
+
+// Global exception handler — must be first in pipeline to catch all errors
+app.UseMiddleware<RealtimeAuction.Api.Middleware.GlobalExceptionMiddleware>();
+
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
@@ -403,6 +470,9 @@ if (app.Environment.IsDevelopment())
 
 // Enable CORS - phải đặt TRƯỚC UseHttpsRedirection
 app.UseCors("AllowReactApp");
+
+// Enable Rate Limiting — must be before auth middleware
+app.UseRateLimiter();
 
 // Only enable HTTPS redirection if HTTPS port is configured
 // This prevents the warning when running with HTTP-only profile
@@ -424,5 +494,8 @@ app.MapControllers();
 
 // Map SignalR Hub
 app.MapHub<RealtimeAuction.Api.Hubs.AuctionHub>("/auctionHub");
+
+// Health check endpoint
+app.MapHealthChecks("/health");
 
 app.Run();

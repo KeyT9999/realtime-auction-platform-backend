@@ -4,7 +4,6 @@ using Microsoft.AspNetCore.Mvc;
 using RealtimeAuction.Api.Dtos.Payment;
 using RealtimeAuction.Api.Repositories;
 using RealtimeAuction.Api.Services;
-using System.IO;
 
 namespace RealtimeAuction.Api.Controllers;
 
@@ -38,11 +37,7 @@ public class PaymentController : ControllerBase
     {
         try
         {
-            // #region agent log
             var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
-            var allClaims = User.Claims.Select(c => new { type = c.Type, value = c.Value }).ToList();
-            WriteDebugLog("PaymentController.cs:36", "CreateDeposit entry", new { userId, claims = allClaims, amount = request.Amount }, "C", "run1");
-            // #endregion
             
             if (string.IsNullOrEmpty(userId))
             {
@@ -54,36 +49,10 @@ public class PaymentController : ControllerBase
         }
         catch (Exception ex)
         {
-            // #region agent log
-            WriteDebugLog("PaymentController.cs:51", "Exception in CreateDeposit", new { error = ex.Message, stackTrace = ex.StackTrace }, "C", "run1");
-            // #endregion
             _logger.LogError(ex, "Error creating deposit link");
             return BadRequest(new { message = ex.Message });
         }
     }
-    
-    // #region agent log
-    private const string DEBUG_LOG_PATH = @"d:\DauGia\.cursor\debug.log";
-    private void WriteDebugLog(string location, string message, object? data = null, string? hypothesisId = null, string? runId = null)
-    {
-        try
-        {
-            var logEntry = new
-            {
-                id = $"log_{DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}_{Guid.NewGuid():N}",
-                timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
-                location = location,
-                message = message,
-                data = data,
-                runId = runId ?? "run1",
-                hypothesisId = hypothesisId
-            };
-            var json = System.Text.Json.JsonSerializer.Serialize(logEntry);
-            System.IO.File.AppendAllText(DEBUG_LOG_PATH, json + Environment.NewLine);
-        }
-        catch { }
-    }
-    // #endregion
 
     /// <summary>
     /// Webhook từ PayOS khi thanh toán thành công
@@ -94,6 +63,13 @@ public class PaymentController : ControllerBase
         try
         {
             _logger.LogInformation("Received PayOS webhook: {Code}", payload.Code);
+            
+            // Verify webhook signature before processing
+            if (!_paymentService.VerifyWebhookSignature(payload))
+            {
+                _logger.LogWarning("PayOS webhook rejected: invalid signature");
+                return Unauthorized(new { success = false, message = "Invalid signature" });
+            }
             
             var result = await _paymentService.HandleWebhookAsync(payload);
             

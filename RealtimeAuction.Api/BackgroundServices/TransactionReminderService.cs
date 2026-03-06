@@ -117,7 +117,8 @@ public class TransactionReminderService : BackgroundService
             daysRemaining = 0;
         }
 
-        var transactionUrl = $"http://localhost:5173/auctions/{auction.Id}";
+        var configuration = _serviceProvider.CreateScope().ServiceProvider.GetRequiredService<IConfiguration>();
+        var transactionUrl = $"{configuration["FrontendUrl"]}/auctions/{auction.Id}";
         var warningMessage = daysRemaining <= 2 
             ? "Giao dịch có thể bị hủy nếu không được xác nhận kịp thời!" 
             : "Vui lòng xác nhận giao dịch để hoàn tất quy trình.";
