@@ -30,6 +30,7 @@ public class AuctionController : ControllerBase
     private readonly IEmailService _emailService;
     private readonly IHubContext<AuctionHub> _hubContext;
     private readonly ILogger<AuctionController> _logger;
+    private readonly IConfiguration _configuration;
 
     public AuctionController(
         IAuctionRepository auctionRepository,
@@ -41,7 +42,8 @@ public class AuctionController : ControllerBase
         ITransactionRepository transactionRepository,
         IEmailService emailService,
         IHubContext<AuctionHub> hubContext,
-        ILogger<AuctionController> logger)
+        ILogger<AuctionController> logger,
+        IConfiguration configuration)
     {
         _auctionRepository = auctionRepository;
         _categoryRepository = categoryRepository;
@@ -53,6 +55,7 @@ public class AuctionController : ControllerBase
         _emailService = emailService;
         _hubContext = hubContext;
         _logger = logger;
+        _configuration = configuration;
     }
 
     [HttpGet]
@@ -703,7 +706,7 @@ public class AuctionController : ControllerBase
                 try
                 {
                     var seller = await _userRepository.GetByIdAsync(userId);
-                    var transactionUrl = $"http://localhost:5173/auctions/{auction.Id}";
+                    var transactionUrl = $"{_configuration["FrontendUrl"]}/auctions/{auction.Id}";
                     
                     await _emailService.SendBidAcceptedEmailAsync(
                         winner.Email,
@@ -838,7 +841,7 @@ public class AuctionController : ControllerBase
             });
 
             // Send Buyout emails to both buyer and seller
-            var transactionUrl = $"http://localhost:5173/auctions/{auction.Id}";
+            var transactionUrl = $"{_configuration["FrontendUrl"]}/auctions/{auction.Id}";
             
             // Email to buyer
             if (buyer != null && !string.IsNullOrEmpty(buyer.Email))

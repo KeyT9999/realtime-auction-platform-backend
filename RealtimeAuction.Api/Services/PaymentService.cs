@@ -138,8 +138,46 @@ public class PaymentService : IPaymentService
         }
     }
 
+    public bool VerifyWebhookSignature(PayOsWebhookPayload payload)
+    {
+        if (payload.Data == null || string.IsNullOrEmpty(payload.Signature))
+            return false;
+
+        // Build signature data from WebhookData fields sorted alphabetically
+        // PayOS format: key=value&key=value (sorted by key)
+        var data = payload.Data;
+        var sortedParams = new SortedDictionary<string, string>
+        {
+            ["accountNumber"] = data.AccountNumber ?? "",
+            ["amount"] = ((int)data.Amount).ToString(),
+            ["code"] = data.Code ?? "",
+            ["counterAccountBankId"] = data.CounterAccountBankId ?? "",
+            ["counterAccountBankName"] = data.CounterAccountBankName ?? "",
+            ["counterAccountName"] = data.CounterAccountName ?? "",
+            ["counterAccountNumber"] = data.CounterAccountNumber ?? "",
+            ["desc"] = data.Desc ?? "",
+            ["description"] = data.Description ?? "",
+            ["orderCode"] = data.OrderCode.ToString(),
+            ["paymentLinkId"] = data.PaymentLinkId ?? "",
+            ["reference"] = data.Reference ?? "",
+            ["transactionDateTime"] = data.TransactionDateTime ?? "",
+            ["virtualAccountName"] = data.VirtualAccountName ?? "",
+            ["virtualAccountNumber"] = data.VirtualAccountNumber ?? ""
+        };
+
+        var signatureData = string.Join("&", sortedParams.Select(kv => $"{kv.Key}={kv.Value}"));
+        return VerifySignature(signatureData, payload.Signature);
+    }
+
     public async Task<bool> HandleWebhookAsync(PayOsWebhookPayload payload)
     {
+        // Verify webhook signature to prevent forged payloads
+        if (!VerifyWebhookSignature(payload))
+        {
+            _logger.LogWarning("Invalid webhook signature received");
+            return false;
+        }
+
         if (!payload.Success || payload.Data == null)
         {
             _logger.LogWarning("Webhook received but not successful: {Code} - {Desc}", payload.Code, payload.Desc);

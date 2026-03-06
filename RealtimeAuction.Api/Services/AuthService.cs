@@ -162,6 +162,13 @@ namespace RealtimeAuction.Api.Services
                 throw new AuthenticationException("User not found");
             }
 
+            // Security: Prevent locked users from refreshing tokens
+            if (user.IsLocked)
+            {
+                await _tokenService.RevokeRefreshTokenAsync(request.RefreshToken);
+                throw new AuthenticationException($"Account is locked. Reason: {user.LockedReason ?? "No reason provided"}");
+            }
+
             // Revoke old refresh token (Security best practice: Rotate tokens)
             await _tokenService.RevokeRefreshTokenAsync(request.RefreshToken);
 
@@ -230,8 +237,8 @@ namespace RealtimeAuction.Api.Services
             }
 
             // Tạo mã OTP 6 chữ số
-            var random = new Random();
-            var otpCode = random.Next(100000, 999999).ToString();
+            // Tạo mã OTP 6 chữ số (cryptographically secure)
+            var otpCode = RandomNumberGenerator.GetInt32(100000, 1000000).ToString();
 
             // Hash OTP bằng BCrypt
             var otpCodeHash = BCrypt.Net.BCrypt.HashPassword(otpCode);
@@ -365,8 +372,8 @@ namespace RealtimeAuction.Api.Services
             }
 
             // Tạo mã OTP 6 chữ số mới
-            var random = new Random();
-            var otpCode = random.Next(100000, 999999).ToString();
+            // Tạo mã OTP 6 chữ số mới (cryptographically secure)
+            var otpCode = RandomNumberGenerator.GetInt32(100000, 1000000).ToString();
 
             // Hash OTP bằng BCrypt
             var otpCodeHash = BCrypt.Net.BCrypt.HashPassword(otpCode);
@@ -534,8 +541,8 @@ namespace RealtimeAuction.Api.Services
 
 
             // Tạo mã OTP 6 chữ số
-            var random = new Random();
-            var otpCode = random.Next(100000, 999999).ToString();
+            // Tạo mã OTP 6 chữ số (cryptographically secure)
+            var otpCode = RandomNumberGenerator.GetInt32(100000, 1000000).ToString();
 
 
 

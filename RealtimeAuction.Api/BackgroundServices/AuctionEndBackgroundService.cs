@@ -201,7 +201,8 @@ public class AuctionEndBackgroundService : BackgroundService
             try
             {
                 var emailService = scope.ServiceProvider.GetRequiredService<IEmailService>();
-                var transactionUrl = $"http://localhost:5173/auctions/{auctionId}";
+                var configuration = scope.ServiceProvider.GetRequiredService<IConfiguration>();
+                var transactionUrl = $"{configuration["FrontendUrl"]}/auctions/{auctionId}";
                 var winningBidStr = FormatCurrency(highestBid.Amount);
                 
                 await emailService.SendAuctionWonEmailAsync(

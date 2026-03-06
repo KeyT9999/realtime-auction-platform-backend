@@ -93,7 +93,8 @@ public class AuctionEndingSoonNotificationService : BackgroundService
                 var timeRemaining = auction.EndTime - DateTime.UtcNow;
                 var timeRemainingStr = FormatTimeRemaining(timeRemaining);
                 var currentPriceStr = FormatCurrency(auction.CurrentPrice);
-                var auctionUrl = $"http://localhost:5173/auctions/{auction.Id}";
+                var configuration = scope.ServiceProvider.GetRequiredService<IConfiguration>();
+                var auctionUrl = $"{configuration["FrontendUrl"]}/auctions/{auction.Id}";
                 await AuctionHub.NotifyEndingSoon(_hubContext, auction.Id!, new
                 {
                     AuctionId = auction.Id,
@@ -141,7 +142,8 @@ public class AuctionEndingSoonNotificationService : BackgroundService
         var timeRemaining = auction.EndTime - DateTime.UtcNow;
         var timeRemainingStr = FormatTimeRemaining(timeRemaining);
         var currentPriceStr = FormatCurrency(auction.CurrentPrice);
-        var auctionUrl = $"http://localhost:5173/auctions/{auction.Id}";
+        var configuration2 = _serviceProvider.CreateScope().ServiceProvider.GetRequiredService<IConfiguration>();
+        var auctionUrl = $"{configuration2["FrontendUrl"]}/auctions/{auction.Id}";
 
         foreach (var watchlist in unsent)
         {
