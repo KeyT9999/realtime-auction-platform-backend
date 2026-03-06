@@ -27,15 +27,30 @@ public class OrderController : ControllerBase
     }
 
     /// <summary>
-    /// Get buyer's orders (won auctions)
+    /// Get buyer's orders (won auctions). Optional: status (0-3), fromDate, toDate, search (product title).
     /// </summary>
     [HttpGet("my-orders")]
-    public async Task<ActionResult<IEnumerable<OrderDto>>> GetMyOrders()
+    public async Task<ActionResult<IEnumerable<OrderDto>>> GetMyOrders(
+        [FromQuery] int? status = null,
+        [FromQuery] DateTime? fromDate = null,
+        [FromQuery] DateTime? toDate = null,
+        [FromQuery] string? search = null)
     {
         try
         {
             var userId = GetUserId();
-            var orders = await _orderService.GetBuyerOrdersAsync(userId);
+            var orders = (await _orderService.GetBuyerOrdersAsync(userId)).ToList();
+            if (status.HasValue)
+                orders = orders.Where(o => (int)o.Status == status.Value).ToList();
+            if (fromDate.HasValue)
+                orders = orders.Where(o => o.CreatedAt >= fromDate.Value).ToList();
+            if (toDate.HasValue)
+                orders = orders.Where(o => o.CreatedAt < toDate.Value.Date.AddDays(1)).ToList();
+            if (!string.IsNullOrWhiteSpace(search))
+            {
+                var term = search.Trim().ToLowerInvariant();
+                orders = orders.Where(o => (o.ProductTitle ?? "").ToLowerInvariant().Contains(term)).ToList();
+            }
             return Ok(orders);
         }
         catch (Exception ex)
@@ -46,15 +61,30 @@ public class OrderController : ControllerBase
     }
 
     /// <summary>
-    /// Get seller's sales
+    /// Get seller's sales. Optional: status (0-3), fromDate, toDate, search (product title).
     /// </summary>
     [HttpGet("my-sales")]
-    public async Task<ActionResult<IEnumerable<OrderDto>>> GetMySales()
+    public async Task<ActionResult<IEnumerable<OrderDto>>> GetMySales(
+        [FromQuery] int? status = null,
+        [FromQuery] DateTime? fromDate = null,
+        [FromQuery] DateTime? toDate = null,
+        [FromQuery] string? search = null)
     {
         try
         {
             var userId = GetUserId();
-            var orders = await _orderService.GetSellerOrdersAsync(userId);
+            var orders = (await _orderService.GetSellerOrdersAsync(userId)).ToList();
+            if (status.HasValue)
+                orders = orders.Where(o => (int)o.Status == status.Value).ToList();
+            if (fromDate.HasValue)
+                orders = orders.Where(o => o.CreatedAt >= fromDate.Value).ToList();
+            if (toDate.HasValue)
+                orders = orders.Where(o => o.CreatedAt < toDate.Value.Date.AddDays(1)).ToList();
+            if (!string.IsNullOrWhiteSpace(search))
+            {
+                var term = search.Trim().ToLowerInvariant();
+                orders = orders.Where(o => (o.ProductTitle ?? "").ToLowerInvariant().Contains(term)).ToList();
+            }
             return Ok(orders);
         }
         catch (Exception ex)

@@ -9,7 +9,7 @@ public class ImageUploadService : IImageUploadService
 {
     private readonly Cloudinary _cloudinary;
     private readonly ILogger<ImageUploadService> _logger;
-    private const long MaxFileSize = 5 * 1024 * 1024; // 5MB
+    private const long MaxFileSize = 50 * 1024 * 1024; // 50MB
     private readonly string[] AllowedExtensions = { ".jpg", ".jpeg", ".png", ".webp" };
     private readonly string _cloudName;
 

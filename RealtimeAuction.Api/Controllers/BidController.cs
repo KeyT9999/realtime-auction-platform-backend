@@ -55,11 +55,15 @@ public class BidController : ControllerBase
     }
 
     [HttpGet("auction/{auctionId}")]
-    public async Task<IActionResult> GetBidsByAuction(string auctionId)
+    public async Task<IActionResult> GetBidsByAuction(string auctionId, [FromQuery] int page = 1, [FromQuery] int limit = 20)
     {
         try
         {
-            var bids = await _bidRepository.GetByAuctionIdAsync(auctionId);
+            if (limit < 1) limit = 20;
+            if (limit > 100) limit = 100;
+            if (page < 1) page = 1;
+
+            var (bids, totalCount) = await _bidRepository.GetByAuctionIdPagedAsync(auctionId, page, limit);
             var auction = await _auctionRepository.GetByIdAsync(auctionId);
             var auctionTitle = auction?.Title;
 
@@ -85,7 +89,7 @@ public class BidController : ControllerBase
                 } : null,
                 CreatedAt = b.CreatedAt
             }).ToList();
-            return Ok(response);
+            return Ok(new { bids = response, totalCount, page, limit, totalPages = (int)Math.Ceiling(totalCount / (double)limit) });
         }
         catch (Exception ex)
         {
