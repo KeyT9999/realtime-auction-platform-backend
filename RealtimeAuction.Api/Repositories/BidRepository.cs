@@ -42,6 +42,19 @@ public class BidRepository : IBidRepository
             .ToListAsync();
     }
 
+    public async Task<(List<Bid> Items, int TotalCount)> GetByAuctionIdPagedAsync(string auctionId, int page, int limit)
+    {
+        var filter = Builders<Bid>.Filter.Eq(b => b.AuctionId, auctionId);
+        var totalCount = (int)await _bids.CountDocumentsAsync(filter);
+        var items = await _bids.Find(filter)
+            .SortByDescending(b => b.CreatedAt)
+            .ThenByDescending(b => b.Timestamp)
+            .Skip((page - 1) * limit)
+            .Limit(limit)
+            .ToListAsync();
+        return (items, totalCount);
+    }
+
     public async Task<List<Bid>> GetByUserIdAsync(string userId)
     {
         return await _bids.Find(b => b.UserId == userId)
