@@ -198,3 +198,9 @@ obj/
 *.suo
 *.cache
 *.log
+
+# AI Skills (local only, không push lên Git)
+.agents/
+_agents/
+.agent/
+_agent/

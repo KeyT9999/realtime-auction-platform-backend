@@ -183,8 +183,7 @@ public class WithdrawalService : IWithdrawalService
         // Update transaction description
         if (!string.IsNullOrEmpty(withdrawal.RelatedTransactionId))
         {
-            var transactions = await _transactionRepository.GetByUserIdAsync(userId);
-            var tx = transactions.FirstOrDefault(t => t.Id == withdrawal.RelatedTransactionId);
+            var tx = await _transactionRepository.GetByIdAsync(withdrawal.RelatedTransactionId);
             if (tx != null)
             {
                 tx.Description = "Yêu cầu rút tiền - đã xác nhận OTP, chờ admin duyệt";
@@ -468,8 +467,8 @@ public class WithdrawalService : IWithdrawalService
     {
         if (string.IsNullOrEmpty(withdrawal.RelatedTransactionId)) return;
 
-        var transactions = await _transactionRepository.GetByUserIdAsync(withdrawal.UserId);
-        var tx = transactions.FirstOrDefault(t => t.Id == withdrawal.RelatedTransactionId);
+        // Use GetByIdAsync instead of fetching all user transactions
+        var tx = await _transactionRepository.GetByIdAsync(withdrawal.RelatedTransactionId);
         if (tx != null)
         {
             tx.Description = description;
@@ -481,11 +480,8 @@ public class WithdrawalService : IWithdrawalService
 
     private static string GenerateOtp()
     {
-        using var rng = RandomNumberGenerator.Create();
-        var bytes = new byte[4];
-        rng.GetBytes(bytes);
-        var number = Math.Abs(BitConverter.ToInt32(bytes, 0)) % 1000000;
-        return number.ToString("D6");
+        // Use cryptographically secure random (same as AuthService)
+        return RandomNumberGenerator.GetInt32(100000, 1000000).ToString();
     }
 
     private static string HashOtp(string otp)

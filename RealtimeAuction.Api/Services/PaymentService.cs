@@ -49,8 +49,9 @@ public class PaymentService : IPaymentService
             throw new Exception("Người dùng không tồn tại");
         }
 
-        // Tạo orderCode unique
-        var orderCode = long.Parse(DateTime.UtcNow.ToString("yyMMddHHmmss") + new Random().Next(100, 999).ToString());
+        // Tạo orderCode unique (crypto-safe random)
+        var randomPart = RandomNumberGenerator.GetInt32(100, 999);
+        var orderCode = long.Parse(DateTime.UtcNow.ToString("yyMMddHHmmss") + randomPart.ToString());
 
         var paymentData = new
         {
@@ -82,14 +83,14 @@ public class PaymentService : IPaymentService
 
         try
         {
-            _httpClient.DefaultRequestHeaders.Clear();
-            _httpClient.DefaultRequestHeaders.Add("x-client-id", _settings.ClientId);
-            _httpClient.DefaultRequestHeaders.Add("x-api-key", _settings.ApiKey);
+            var httpRequest = new HttpRequestMessage(HttpMethod.Post, PAYOS_API_URL);
+            httpRequest.Headers.Add("x-client-id", _settings.ClientId);
+            httpRequest.Headers.Add("x-api-key", _settings.ApiKey);
 
             var json = JsonSerializer.Serialize(requestBody);
-            var content = new StringContent(json, Encoding.UTF8, "application/json");
+            httpRequest.Content = new StringContent(json, Encoding.UTF8, "application/json");
 
-            var response = await _httpClient.PostAsync(PAYOS_API_URL, content);
+            var response = await _httpClient.SendAsync(httpRequest);
             var responseContent = await response.Content.ReadAsStringAsync();
 
             _logger.LogInformation("PayOS Response: {Response}", responseContent);
@@ -238,11 +239,11 @@ public class PaymentService : IPaymentService
     {
         try
         {
-            _httpClient.DefaultRequestHeaders.Clear();
-            _httpClient.DefaultRequestHeaders.Add("x-client-id", _settings.ClientId);
-            _httpClient.DefaultRequestHeaders.Add("x-api-key", _settings.ApiKey);
+            var httpRequest = new HttpRequestMessage(HttpMethod.Get, $"{PAYOS_API_URL}/{orderCode}");
+            httpRequest.Headers.Add("x-client-id", _settings.ClientId);
+            httpRequest.Headers.Add("x-api-key", _settings.ApiKey);
 
-            var response = await _httpClient.GetAsync($"{PAYOS_API_URL}/{orderCode}");
+            var response = await _httpClient.SendAsync(httpRequest);
             var responseContent = await response.Content.ReadAsStringAsync();
 
             if (!response.IsSuccessStatusCode)

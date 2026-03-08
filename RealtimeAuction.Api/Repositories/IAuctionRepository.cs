@@ -20,6 +20,7 @@ public interface IAuctionRepository
         string? keyword,
         AuctionStatus? status,
         string? categoryId,
+        string? sellerId,
         decimal? minPrice,
         decimal? maxPrice,
         string? timeFilter,

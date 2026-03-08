@@ -22,6 +22,18 @@ public class BidService : IBidService
         return _auctionLocks.GetOrAdd(auctionId, _ => new SemaphoreSlim(1, 1));
     }
 
+    /// <summary>
+    /// Remove and dispose the lock for a completed/cancelled auction to prevent memory leak.
+    /// Call this from AuctionEndBackgroundService after auction processing is done.
+    /// </summary>
+    public static void RemoveAuctionLock(string auctionId)
+    {
+        if (_auctionLocks.TryRemove(auctionId, out var semaphore))
+        {
+            semaphore.Dispose();
+        }
+    }
+
     public BidService(
         IBidRepository bidRepository,
         IAuctionRepository auctionRepository,
@@ -126,6 +138,11 @@ public class BidService : IBidService
         string? outbidUserId = previousHighestBid?.UserId;
 
         // === BẮT ĐẦU TRANSACTION ===
+        // TODO [ISSUE #5]: Wrap these operations in a MongoDB multi-document transaction 
+        // using IMongoClient.StartSessionAsync() to ensure atomicity.
+        // If any step fails (e.g. CreateAsync for transaction record), the balance changes
+        // will be rolled back automatically. Requires refactoring repositories to accept 
+        // IClientSessionHandle parameter.
         
         // 1. Hold tiền của bidder hiện tại
         var balanceBefore = user.AvailableBalance;
