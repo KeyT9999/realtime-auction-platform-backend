@@ -195,10 +195,13 @@ var useSmtp = !string.IsNullOrWhiteSpace(mailHost) &&
               !string.IsNullOrWhiteSpace(mailPassword);
 
 // Log để debug
-Console.WriteLine($"[Email Config] MAIL_HOST: {(string.IsNullOrWhiteSpace(mailHost) ? "NOT SET" : mailHost)}");
-Console.WriteLine($"[Email Config] MAIL_USERNAME: {(string.IsNullOrWhiteSpace(mailUsername) ? "NOT SET" : "SET")}");
-Console.WriteLine($"[Email Config] MAIL_PASSWORD: {(string.IsNullOrWhiteSpace(mailPassword) ? "NOT SET" : "SET")}");
-Console.WriteLine($"[Email Config] UseSmtp: {useSmtp}");
+if (builder.Environment.IsDevelopment())
+{
+    Console.WriteLine($"[Email Config] MAIL_HOST: {(string.IsNullOrWhiteSpace(mailHost) ? "NOT SET" : mailHost)}");
+    Console.WriteLine($"[Email Config] MAIL_USERNAME: {(string.IsNullOrWhiteSpace(mailUsername) ? "NOT SET" : "SET")}");
+    Console.WriteLine($"[Email Config] MAIL_PASSWORD: {(string.IsNullOrWhiteSpace(mailPassword) ? "NOT SET" : "SET")}");
+    Console.WriteLine($"[Email Config] UseSmtp: {useSmtp}");
+}
 
 
 
@@ -456,6 +459,28 @@ using (var scope = app.Services.CreateScope())
         .Descending(b => b.AuctionId)
         .Descending(b => b.Amount);
     await bids.Indexes.CreateOneAsync(new CreateIndexModel<RealtimeAuction.Api.Models.Bid>(indexKeys));
+
+    var auctions = database.GetCollection<RealtimeAuction.Api.Models.Auction>("Auctions");
+    await auctions.Indexes.CreateManyAsync(new[]
+    {
+        new CreateIndexModel<RealtimeAuction.Api.Models.Auction>(
+            Builders<RealtimeAuction.Api.Models.Auction>.IndexKeys.Ascending(a => a.Status)),
+        new CreateIndexModel<RealtimeAuction.Api.Models.Auction>(
+            Builders<RealtimeAuction.Api.Models.Auction>.IndexKeys.Ascending(a => a.CategoryId)),
+        new CreateIndexModel<RealtimeAuction.Api.Models.Auction>(
+            Builders<RealtimeAuction.Api.Models.Auction>.IndexKeys.Ascending(a => a.SellerId)),
+        new CreateIndexModel<RealtimeAuction.Api.Models.Auction>(
+            Builders<RealtimeAuction.Api.Models.Auction>.IndexKeys.Ascending(a => a.EndTime)),
+        new CreateIndexModel<RealtimeAuction.Api.Models.Auction>(
+            Builders<RealtimeAuction.Api.Models.Auction>.IndexKeys.Descending(a => a.StartTime)),
+        new CreateIndexModel<RealtimeAuction.Api.Models.Auction>(
+            Builders<RealtimeAuction.Api.Models.Auction>.IndexKeys.Ascending(a => a.CurrentPrice)),
+    });
+
+    var users = database.GetCollection<RealtimeAuction.Api.Models.User>("Users");
+    await users.Indexes.CreateOneAsync(new CreateIndexModel<RealtimeAuction.Api.Models.User>(
+        Builders<RealtimeAuction.Api.Models.User>.IndexKeys.Ascending(u => u.Email),
+        new CreateIndexOptions { Unique = true }));
 }
 
 // Configure the HTTP request pipeline.

@@ -108,6 +108,7 @@ public class AuctionRepository : IAuctionRepository
         string? keyword,
         AuctionStatus? status,
         string? categoryId,
+        string? sellerId,
         decimal? minPrice,
         decimal? maxPrice,
         string? timeFilter,
@@ -139,6 +140,12 @@ public class AuctionRepository : IAuctionRepository
         if (!string.IsNullOrEmpty(categoryId))
         {
             filters.Add(filterBuilder.Eq(a => a.CategoryId, categoryId));
+        }
+
+        // Seller filter
+        if (!string.IsNullOrEmpty(sellerId))
+        {
+            filters.Add(filterBuilder.Eq(a => a.SellerId, sellerId));
         }
 
         // Price range filter

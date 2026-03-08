@@ -6,8 +6,8 @@ namespace RealtimeAuction.Api.Hubs;
 
 public class AuctionHub : Hub
 {
-    // Track viewers in each auction room: AuctionId -> HashSet<ConnectionId>
-    private static readonly ConcurrentDictionary<string, HashSet<string>> _auctionViewers = new();
+    // Track viewers in each auction room: AuctionId -> ConcurrentDictionary<ConnectionId, byte> (thread-safe)
+    private static readonly ConcurrentDictionary<string, ConcurrentDictionary<string, byte>> _auctionViewers = new();
     
     // Track user connections: ConnectionId -> UserId (NameIdentifier for NotifyUserOutbid)
     private static readonly ConcurrentDictionary<string, string?> _userConnections = new();
@@ -86,10 +86,10 @@ public class AuctionHub : Hub
         // Track this viewer
         _auctionViewers.AddOrUpdate(
             auctionId,
-            new HashSet<string> { Context.ConnectionId },
+            new ConcurrentDictionary<string, byte>(new[] { new KeyValuePair<string, byte>(Context.ConnectionId, 0) }),
             (key, existing) =>
             {
-                existing.Add(Context.ConnectionId);
+                existing.TryAdd(Context.ConnectionId, 0);
                 return existing;
             });
 
@@ -115,9 +115,9 @@ public class AuctionHub : Hub
         // Remove from viewers tracking
         if (_auctionViewers.TryGetValue(auctionId, out var viewers))
         {
-            viewers.Remove(Context.ConnectionId);
+            viewers.TryRemove(Context.ConnectionId, out _);
 
-            if (viewers.Count == 0)
+            if (viewers.IsEmpty)
             {
                 _auctionViewers.TryRemove(auctionId, out _);
             }
@@ -262,7 +262,7 @@ public class AuctionHub : Hub
             return Array.Empty<string>();
 
         var userIds = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var cid in connectionIds)
+        foreach (var cid in connectionIds.Keys)
         {
             if (_userConnections.TryGetValue(cid, out var uid) && !string.IsNullOrEmpty(uid))
                 userIds.Add(uid);

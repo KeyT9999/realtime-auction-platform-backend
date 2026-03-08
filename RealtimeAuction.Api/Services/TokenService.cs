@@ -43,7 +43,7 @@ namespace RealtimeAuction.Api.Services
             return tokenHandler.WriteToken(token);
         }
 
-        public RefreshToken GenerateRefreshToken(string userId)
+        public async Task<RefreshToken> GenerateRefreshTokenAsync(string userId)
         {
             var refreshToken = new RefreshToken
             {
@@ -54,7 +54,7 @@ namespace RealtimeAuction.Api.Services
                 CreatedAt = DateTime.UtcNow
             };
 
-            _refreshTokenCollection.InsertOne(refreshToken);
+            await _refreshTokenCollection.InsertOneAsync(refreshToken);
             return refreshToken;
         }
 

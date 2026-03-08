@@ -79,66 +79,20 @@ public class AuctionController : ControllerBase
     {
         try
         {
-            // Use advanced search if any filter is provided
-            if (!string.IsNullOrEmpty(keyword) || 
-                minPrice.HasValue || 
-                maxPrice.HasValue || 
-                !string.IsNullOrEmpty(timeFilter))
-            {
-                var (items, searchTotalCount) = await _auctionRepository.SearchAuctionsAsync(
-                    keyword, status, categoryId, minPrice, maxPrice, 
-                    timeFilter, sortBy, sortOrder, page, pageSize);
+            var (items, totalCount) = await _auctionRepository.SearchAuctionsAsync(
+                keyword, status, categoryId, sellerId, minPrice, maxPrice,
+                timeFilter, sortBy, sortOrder, page, pageSize);
 
-                var response = await MapToResponseDtos(items);
-                var searchTotalPages = (int)Math.Ceiling((double)searchTotalCount / pageSize);
-
-                return Ok(new
-                {
-                    items = response,
-                    totalCount = searchTotalCount,
-                    page,
-                    pageSize,
-                    totalPages = searchTotalPages
-                });
-            }
-
-            // Fallback to simple queries for backward compatibility
-            List<Auction> auctions;
-            if (status.HasValue)
-            {
-                auctions = await _auctionRepository.GetByStatusAsync(status.Value);
-            }
-            else if (!string.IsNullOrEmpty(categoryId))
-            {
-                auctions = await _auctionRepository.GetByCategoryIdAsync(categoryId);
-            }
-            else if (!string.IsNullOrEmpty(sellerId))
-            {
-                auctions = await _auctionRepository.GetBySellerIdAsync(sellerId);
-            }
-            else
-            {
-                auctions = await _auctionRepository.GetAllAsync();
-            }
-
-
-            // Apply pagination to simple queries
-            var simpleTotalCount = auctions.Count;
-            var paginatedAuctions = auctions
-                .Skip((page - 1) * pageSize)
-                .Take(pageSize)
-                .ToList();
-
-            var simpleResponse = await MapToResponseDtos(paginatedAuctions);
-            var simpleTotalPages = (int)Math.Ceiling((double)simpleTotalCount / pageSize);
+            var response = await MapToResponseDtos(items);
+            var totalPages = (int)Math.Ceiling((double)totalCount / pageSize);
 
             return Ok(new
             {
-                items = simpleResponse,
-                totalCount = simpleTotalCount,
+                items = response,
+                totalCount,
                 page,
                 pageSize,
-                totalPages = simpleTotalPages
+                totalPages
             });
         }
         catch (Exception ex)
@@ -149,6 +103,7 @@ public class AuctionController : ControllerBase
     }
 
     [HttpGet("{id}")]
+    [AllowAnonymous] // Allow viewing auction detail without login
     public async Task<IActionResult> GetAuctionById(string id)
     {
         try
@@ -157,19 +112,6 @@ public class AuctionController : ControllerBase
             if (auction == null)
             {
                 return NotFound(new { message = "Auction not found" });
-            }
-
-            // Auto-activate auction if it's time to start (for scheduled auctions)
-            var now = DateTime.UtcNow;
-            if (auction.Status != AuctionStatus.Active && 
-                now >= auction.StartTime && 
-                now < auction.EndTime &&
-                auction.Status != AuctionStatus.Completed &&
-                auction.Status != AuctionStatus.Cancelled)
-            {
-                _logger.LogInformation($"Auto-activating auction {id} - time has come");
-                auction.Status = AuctionStatus.Active;
-                await _auctionRepository.UpdateAsync(auction);
             }
 
             var response = await MapToResponseDto(auction);
@@ -250,7 +192,7 @@ public class AuctionController : ControllerBase
             var now = DateTime.UtcNow;
             var initialStatus = request.StartTime <= now 
                 ? AuctionStatus.Active  // Start immediately if start time has passed
-                : AuctionStatus.Active;  // Also Active if scheduled for future (will be handled by background service)
+                : AuctionStatus.Pending;  // Scheduled for future - will be activated by background service
 
             var auction = new Auction
             {
@@ -584,12 +526,78 @@ public class AuctionController : ControllerBase
 
     private async Task<List<AuctionResponseDto>> MapToResponseDtos(List<Auction> auctions)
     {
-        var result = new List<AuctionResponseDto>();
-        foreach (var auction in auctions)
+        if (auctions.Count == 0) return new List<AuctionResponseDto>();
+
+        var categoryIds = auctions.Select(a => a.CategoryId).Where(id => !string.IsNullOrEmpty(id)).Distinct().ToList();
+        var productIds = auctions.Select(a => a.ProductId).Where(id => !string.IsNullOrEmpty(id)).Distinct().ToList();
+        var sellerIds = auctions.Select(a => a.SellerId).Where(id => !string.IsNullOrEmpty(id)).Distinct().ToList();
+        var winnerIds = auctions.Select(a => a.WinnerId).Where(id => !string.IsNullOrEmpty(id)).Distinct().ToList();
+        var auctionIds = auctions.Select(a => a.Id ?? "").Where(id => !string.IsNullOrEmpty(id)).ToList();
+        var allUserIds = sellerIds.Union(winnerIds).Distinct().ToList();
+
+        var categoriesTask = Task.WhenAll(categoryIds.Select(id => _categoryRepository.GetByIdAsync(id)));
+        var productsTask = Task.WhenAll(productIds.Select(id => _productRepository.GetByIdAsync(id)));
+        var usersTask = Task.WhenAll(allUserIds.Select(id => _userRepository.GetByIdAsync(id)));
+        var bidsTask = Task.WhenAll(auctionIds.Select(id => _bidRepository.GetByAuctionIdAsync(id)));
+
+        await Task.WhenAll(categoriesTask, productsTask, usersTask, bidsTask);
+
+        var categoryMap = (await categoriesTask).Where(c => c != null).ToDictionary(c => c!.Id ?? "", c => c!);
+        var productMap = (await productsTask).Where(p => p != null).ToDictionary(p => p!.Id ?? "", p => p!);
+        var userMap = (await usersTask).Where(u => u != null).ToDictionary(u => u!.Id ?? "", u => u!);
+        var bidsMap = auctionIds.Zip(await bidsTask, (id, bids) => (id, bids)).ToDictionary(x => x.id, x => x.bids);
+
+        return auctions.Select(auction =>
         {
-            result.Add(await MapToResponseDto(auction));
-        }
-        return result;
+            categoryMap.TryGetValue(auction.CategoryId ?? "", out var category);
+            productMap.TryGetValue(auction.ProductId ?? "", out var product);
+            userMap.TryGetValue(auction.SellerId ?? "", out var seller);
+            userMap.TryGetValue(auction.WinnerId ?? "", out var winner);
+            bidsMap.TryGetValue(auction.Id ?? "", out var bids);
+
+            return new AuctionResponseDto
+            {
+                Id = auction.Id ?? "",
+                Title = auction.Title,
+                Description = auction.Description,
+                StartingPrice = auction.StartingPrice,
+                CurrentPrice = auction.CurrentPrice,
+                ReservePrice = auction.ReservePrice,
+                StartTime = auction.StartTime,
+                EndTime = auction.EndTime,
+                Duration = auction.Duration,
+                Status = auction.Status,
+                SellerId = auction.SellerId,
+                SellerName = seller?.FullName,
+                CategoryId = auction.CategoryId,
+                CategoryName = category?.Name,
+                ProductId = auction.ProductId,
+                Product = product != null ? new Dtos.Product.ProductResponseDto
+                {
+                    Id = product.Id ?? "",
+                    Name = product.Name,
+                    Description = product.Description,
+                    Condition = product.Condition,
+                    Category = product.Category,
+                    Brand = product.Brand,
+                    Model = product.Model,
+                    Year = product.Year,
+                    Images = product.Images,
+                    Specifications = product.Specifications
+                } : null,
+                Images = auction.Images,
+                BidIncrement = auction.BidIncrement,
+                AutoExtendDuration = auction.AutoExtendDuration,
+                BuyoutPrice = auction.BuyoutPrice,
+                WinnerId = auction.WinnerId,
+                WinnerName = winner?.FullName,
+                EndReason = auction.EndReason,
+                CreatedAt = auction.CreatedAt,
+                UpdatedAt = auction.UpdatedAt,
+                BidCount = bids?.Count ?? 0
+            };
+        }).ToList();
+
     }
 
     [HttpPost("{id}/accept-bid")]

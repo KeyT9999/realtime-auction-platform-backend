@@ -145,7 +145,7 @@ namespace RealtimeAuction.Api.Services
 
 
 
-            return GenerateAuthResponse(user);
+            return await GenerateAuthResponseAsync(user);
         }
 
         public async Task<AuthResponse> RefreshTokenAsync(RefreshTokenRequest request)
@@ -172,7 +172,7 @@ namespace RealtimeAuction.Api.Services
             // Revoke old refresh token (Security best practice: Rotate tokens)
             await _tokenService.RevokeRefreshTokenAsync(request.RefreshToken);
 
-            return GenerateAuthResponse(user);
+            return await GenerateAuthResponseAsync(user);
         }
 
         public async Task RevokeRefreshTokenAsync(string refreshToken)
@@ -216,7 +216,7 @@ namespace RealtimeAuction.Api.Services
                     await _users.ReplaceOneAsync(u => u.Id == user.Id, user);
                 }
 
-                return GenerateAuthResponse(user);
+                return await GenerateAuthResponseAsync(user);
 
             }
             catch (InvalidJwtException ex)
@@ -598,10 +598,10 @@ namespace RealtimeAuction.Api.Services
             await _emailService.SendVerificationEmailAsync(user.Email, user.FullName, token, verificationUrl);
         }
 
-        private AuthResponse GenerateAuthResponse(User user)
+        private async Task<AuthResponse> GenerateAuthResponseAsync(User user)
         {
             var accessToken = _tokenService.GenerateAccessToken(user);
-            var refreshToken = _tokenService.GenerateRefreshToken(user.Id!);
+            var refreshToken = await _tokenService.GenerateRefreshTokenAsync(user.Id!);
 
             return new AuthResponse
             {

@@ -395,12 +395,50 @@ public class OrderService : IOrderService
 
     private async Task<IEnumerable<OrderDto>> MapToOrderDtosAsync(IEnumerable<Order> orders)
     {
-        var dtos = new List<OrderDto>();
-        foreach (var order in orders)
+        var orderList = orders.ToList();
+        if (orderList.Count == 0) return Enumerable.Empty<OrderDto>();
+
+        // Batch fetch all unique users instead of N+1 queries
+        var allUserIds = orderList
+            .SelectMany(o => new[] { o.BuyerId, o.SellerId })
+            .Where(id => !string.IsNullOrEmpty(id))
+            .Distinct()
+            .ToList();
+
+        var users = await Task.WhenAll(allUserIds.Select(id => _userRepository.GetByIdAsync(id)));
+        var userMap = users.Where(u => u != null).ToDictionary(u => u!.Id!, u => u!);
+
+        return orderList.Select(order =>
         {
-            dtos.Add(await MapToOrderDtoAsync(order));
-        }
-        return dtos;
+            userMap.TryGetValue(order.BuyerId, out var buyer);
+            userMap.TryGetValue(order.SellerId, out var seller);
+
+            return new OrderDto
+            {
+                Id = order.Id!,
+                AuctionId = order.AuctionId,
+                BuyerId = order.BuyerId,
+                SellerId = order.SellerId,
+                BuyerName = buyer?.FullName,
+                SellerName = seller?.FullName,
+                Amount = order.Amount,
+                Status = order.Status,
+                StatusText = GetStatusText(order.Status),
+                TrackingNumber = order.TrackingNumber,
+                ShippingCarrier = order.ShippingCarrier,
+                ShippingNote = order.ShippingNote,
+                ProductTitle = order.ProductTitle,
+                ProductImage = order.ProductImage,
+                ShippedAt = order.ShippedAt,
+                CompletedAt = order.CompletedAt,
+                CancelledAt = order.CancelledAt,
+                CancelReason = order.CancelReason,
+                CreatedAt = order.CreatedAt,
+                BuyerHasReviewed = order.BuyerHasReviewed,
+                SellerHasReviewed = order.SellerHasReviewed,
+                CanReview = false // Will be set by controller based on current user
+            };
+        }).ToList();
     }
 
     private async Task<OrderDto> MapToOrderDtoAsync(Order order)
