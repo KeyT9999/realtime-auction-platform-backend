@@ -47,4 +47,8 @@ public interface IEmailService
     Task SendWithdrawalReminderToAdminAsync(string toEmail, string toName,
         string withdrawalId, string userName, string userEmail, decimal amount, decimal finalAmount,
         string bankName, string accountLast4, int hoursSinceApproved, string message);
+
+    // Auction Approval Email Notifications
+    Task SendAuctionApprovedEmailAsync(string toEmail, string toName, string auctionTitle, string auctionId);
+    Task SendAuctionRejectedEmailAsync(string toEmail, string toName, string auctionTitle, string reason);
 }

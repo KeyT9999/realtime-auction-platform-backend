@@ -598,6 +598,96 @@ public class EmailService : IEmailService
 
         await SendEmailAsync(toEmail, toName, subject, htmlContent);
     }
+
+    // ===== AUCTION APPROVAL EMAIL NOTIFICATIONS =====
+
+    public async Task SendAuctionApprovedEmailAsync(string toEmail, string toName, string auctionTitle, string auctionId)
+    {
+        var frontendUrl = _configuration["FrontendUrl"] ?? "http://localhost:5173";
+        var auctionUrl = $"{frontendUrl}/auctions/{auctionId}";
+
+        var htmlContent = $@"
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <style>
+                body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
+                .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
+                .header {{ background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%); color: white; padding: 25px; text-align: center; border-radius: 8px 8px 0 0; }}
+                .content {{ background: #f9f9f9; padding: 30px; border-radius: 0 0 8px 8px; }}
+                .info-box {{ background: white; padding: 15px; border-radius: 8px; margin: 15px 0; border-left: 4px solid #11998e; }}
+                .btn {{ display: inline-block; padding: 12px 24px; background: #11998e; color: white; text-decoration: none; border-radius: 6px; font-weight: bold; }}
+                .emoji {{ font-size: 48px; margin-bottom: 10px; }}
+            </style>
+        </head>
+        <body>
+            <div class='container'>
+                <div class='header'>
+                    <div class='emoji'>✅</div>
+                    <h1>Phien dau gia da duoc duyet!</h1>
+                </div>
+                <div class='content'>
+                    <p>Xin chao <strong>{toName}</strong>,</p>
+                    <p>Phien dau gia cua ban da duoc admin phe duyet va hien dang hoat dong!</p>
+                    <div class='info-box'>
+                        <p><strong>Ten phien:</strong> {auctionTitle}</p>
+                        <p><strong>Trang thai:</strong> Dang hoat dong</p>
+                    </div>
+                    <p style='text-align: center;'>
+                        <a href='{auctionUrl}' class='btn'>Xem phien dau gia</a>
+                    </p>
+                    <p>Tran trong,<br>Realtime Auction Platform</p>
+                </div>
+            </div>
+        </body>
+        </html>";
+
+        await SendEmailAsync(toEmail, toName, $"✅ Phiên đấu giá đã được duyệt: {auctionTitle}", htmlContent);
+    }
+
+    public async Task SendAuctionRejectedEmailAsync(string toEmail, string toName, string auctionTitle, string reason)
+    {
+        var frontendUrl = _configuration["FrontendUrl"] ?? "http://localhost:5173";
+
+        var htmlContent = $@"
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <style>
+                body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
+                .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
+                .header {{ background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%); color: white; padding: 25px; text-align: center; border-radius: 8px 8px 0 0; }}
+                .content {{ background: #f9f9f9; padding: 30px; border-radius: 0 0 8px 8px; }}
+                .reason-box {{ background: #fff5f5; padding: 15px; border-radius: 8px; margin: 15px 0; border-left: 4px solid #e74c3c; }}
+                .btn {{ display: inline-block; padding: 12px 24px; background: #3b82f6; color: white; text-decoration: none; border-radius: 6px; font-weight: bold; }}
+                .emoji {{ font-size: 48px; margin-bottom: 10px; }}
+            </style>
+        </head>
+        <body>
+            <div class='container'>
+                <div class='header'>
+                    <div class='emoji'>❌</div>
+                    <h1>Phien dau gia bi tu choi</h1>
+                </div>
+                <div class='content'>
+                    <p>Xin chao <strong>{toName}</strong>,</p>
+                    <p>Phien dau gia <strong>{auctionTitle}</strong> da bi tu choi boi admin.</p>
+                    <div class='reason-box'>
+                        <p><strong>Ly do tu choi:</strong></p>
+                        <p>{reason}</p>
+                    </div>
+                    <p>Ban co the chinh sua va gui lai de duyet. Vui long truy cap muc <strong>Phien dau gia cua toi</strong> de cap nhat.</p>
+                    <p style='text-align: center;'>
+                        <a href='{frontendUrl}/my-auctions' class='btn'>Phien dau gia cua toi</a>
+                    </p>
+                    <p>Tran trong,<br>Realtime Auction Platform</p>
+                </div>
+            </div>
+        </body>
+        </html>";
+
+        await SendEmailAsync(toEmail, toName, $"❌ Phiên đấu giá bị từ chối: {auctionTitle}", htmlContent);
+    }
 }
 
 

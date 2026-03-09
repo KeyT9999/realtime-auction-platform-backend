@@ -96,10 +96,13 @@ public class AuctionRepository : IAuctionRepository
         // Define valid transitions
         return currentStatus switch
         {
+            AuctionStatus.Draft => newStatus == AuctionStatus.PendingApproval,
+            AuctionStatus.PendingApproval => newStatus is AuctionStatus.Active or AuctionStatus.Rejected,
+            AuctionStatus.Rejected => newStatus == AuctionStatus.PendingApproval, // seller can resubmit
             AuctionStatus.Active => newStatus == AuctionStatus.Pending || newStatus == AuctionStatus.Cancelled,
             AuctionStatus.Pending => newStatus == AuctionStatus.Completed || newStatus == AuctionStatus.Cancelled,
-            AuctionStatus.Completed => false, // Cannot transition from Completed
-            AuctionStatus.Cancelled => false, // Cannot transition from Cancelled
+            AuctionStatus.Completed => false,
+            AuctionStatus.Cancelled => false,
             _ => false
         };
     }

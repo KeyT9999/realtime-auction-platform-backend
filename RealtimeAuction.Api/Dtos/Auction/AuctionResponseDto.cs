@@ -31,4 +31,9 @@ public class AuctionResponseDto
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
     public int BidCount { get; set; }
+
+    // Approval workflow
+    public string? RejectionReason { get; set; }
+    public DateTime? ApprovedAt { get; set; }
+    public DateTime? SubmittedAt { get; set; }
 }
