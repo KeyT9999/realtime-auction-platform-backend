@@ -688,6 +688,65 @@ public class EmailService : IEmailService
 
         await SendEmailAsync(toEmail, toName, $"❌ Phiên đấu giá bị từ chối: {auctionTitle}", htmlContent);
     }
+
+    // ═══════════════════════════════════════════════
+    // Dispute Email Notifications
+    // ═══════════════════════════════════════════════
+
+    public async Task SendDisputeOpenedEmailAsync(string toEmail, string toName, string productTitle, string openerName, string reason)
+    {
+        var frontendUrl = _configuration["FrontendUrl"] ?? "http://localhost:5173";
+        var htmlContent = $@"
+        <html><body style='font-family:Arial,sans-serif;background:#f4f4f4;padding:20px'>
+            <div style='max-width:600px;margin:auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,.08)'>
+                <div style='background:linear-gradient(135deg,#f59e0b,#d97706);padding:30px;text-align:center'>
+                    <h1 style='color:#fff;margin:0'>⚠️ Tranh Chấp Mới</h1>
+                </div>
+                <div style='padding:30px'>
+                    <p>Xin chào <strong>{toName}</strong>,</p>
+                    <p><strong>{openerName}</strong> đã mở tranh chấp cho sản phẩm:</p>
+                    <div style='background:#fef3c7;border-left:4px solid #f59e0b;padding:15px;border-radius:8px;margin:15px 0'>
+                        <p style='margin:0'><strong>📦 Sản phẩm:</strong> {productTitle}</p>
+                        <p style='margin:5px 0 0'><strong>📋 Lý do:</strong> {reason}</p>
+                    </div>
+                    <p>Vui lòng truy cập trang tranh chấp để xem chi tiết và phản hồi.</p>
+                    <p style='text-align:center'>
+                        <a href='{frontendUrl}/disputes' style='display:inline-block;background:#f59e0b;color:#fff;padding:12px 30px;border-radius:8px;text-decoration:none;font-weight:bold'>Xem tranh chấp</a>
+                    </p>
+                    <p>Trân trọng,<br>Realtime Auction Platform</p>
+                </div>
+            </div>
+        </body></html>";
+
+        await SendEmailAsync(toEmail, toName, $"⚠️ Tranh chấp mới: {productTitle}", htmlContent);
+    }
+
+    public async Task SendDisputeResolvedEmailAsync(string toEmail, string toName, string productTitle, string result, string adminNote)
+    {
+        var frontendUrl = _configuration["FrontendUrl"] ?? "http://localhost:5173";
+        var htmlContent = $@"
+        <html><body style='font-family:Arial,sans-serif;background:#f4f4f4;padding:20px'>
+            <div style='max-width:600px;margin:auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,.08)'>
+                <div style='background:linear-gradient(135deg,#2463eb,#1d4ed8);padding:30px;text-align:center'>
+                    <h1 style='color:#fff;margin:0'>⚖️ Tranh Chấp Đã Giải Quyết</h1>
+                </div>
+                <div style='padding:30px'>
+                    <p>Xin chào <strong>{toName}</strong>,</p>
+                    <p>Tranh chấp cho sản phẩm <strong>{productTitle}</strong> đã được giải quyết.</p>
+                    <div style='background:#eff6ff;border-left:4px solid #2463eb;padding:15px;border-radius:8px;margin:15px 0'>
+                        <p style='margin:0'><strong>📋 Kết quả:</strong> {result}</p>
+                        <p style='margin:5px 0 0'><strong>💬 Ghi chú:</strong> {adminNote}</p>
+                    </div>
+                    <p style='text-align:center'>
+                        <a href='{frontendUrl}/disputes' style='display:inline-block;background:#2463eb;color:#fff;padding:12px 30px;border-radius:8px;text-decoration:none;font-weight:bold'>Xem chi tiết</a>
+                    </p>
+                    <p>Trân trọng,<br>Realtime Auction Platform</p>
+                </div>
+            </div>
+        </body></html>";
+
+        await SendEmailAsync(toEmail, toName, $"⚖️ Kết quả tranh chấp: {productTitle}", htmlContent);
+    }
 }
 
 
