@@ -55,6 +55,7 @@ public class BidController : ControllerBase
     }
 
     [HttpGet("auction/{auctionId}")]
+    [AllowAnonymous]
     public async Task<IActionResult> GetBidsByAuction(string auctionId, [FromQuery] int page = 1, [FromQuery] int limit = 20)
     {
         try

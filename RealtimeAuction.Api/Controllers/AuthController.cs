@@ -2,7 +2,9 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
+using MongoDB.Driver;
 using RealtimeAuction.Api.Dtos.Auth;
+using RealtimeAuction.Api.Models;
 using RealtimeAuction.Api.Services;
 using System.Security.Authentication;
 using System.Security.Claims;
@@ -302,6 +304,60 @@ namespace RealtimeAuction.Api.Controllers
             {
                 return BadRequest(new { message = ex.Message });
             }
+        }
+
+        /// <summary>
+        /// DEV ONLY: Seed 2 test accounts (user + admin) with email already verified.
+        /// POST /api/auth/dev-seed
+        /// </summary>
+        [HttpPost("dev-seed")]
+        public async Task<IActionResult> DevSeed([FromServices] IMongoDatabase db)
+        {
+            if (!_env.IsDevelopment())
+                return NotFound();
+
+            var users = db.GetCollection<User>("Users");
+            var results = new List<object>();
+
+            var seeds = new[]
+            {
+                new { Email = "user@test.com",  Password = "Test@1234",  FullName = "Test User",  Role = "User"  },
+                new { Email = "admin@test.com", Password = "Admin@1234", FullName = "Admin User", Role = "Admin" },
+            };
+
+            foreach (var seed in seeds)
+            {
+                var existing = await users.Find(u => u.Email == seed.Email).FirstOrDefaultAsync();
+                if (existing != null)
+                {
+                    var upd = Builders<User>.Update
+                        .Set(u => u.IsEmailVerified, true)
+                        .Set(u => u.EmailVerifiedAt, DateTime.UtcNow)
+                        .Set(u => u.Role, seed.Role)
+                        .Set(u => u.UpdatedAt, DateTime.UtcNow);
+                    await users.UpdateOneAsync(u => u.Email == seed.Email, upd);
+                    results.Add(new { seed.Email, seed.Role, status = "updated" });
+                }
+                else
+                {
+                    var user = new User
+                    {
+                        Email = seed.Email,
+                        FullName = seed.FullName,
+                        PasswordHash = BCrypt.Net.BCrypt.HashPassword(seed.Password),
+                        Role = seed.Role,
+                        IsEmailVerified = true,
+                        EmailVerifiedAt = DateTime.UtcNow,
+                        CreatedAt = DateTime.UtcNow,
+                        UpdatedAt = DateTime.UtcNow,
+                        AvailableBalance = 10_000_000,
+                    };
+                    await users.InsertOneAsync(user);
+                    results.Add(new { seed.Email, seed.Role, status = "created" });
+                }
+            }
+
+            return Ok(new { message = "Seed completed", accounts = results });
         }
 
         private CookieOptions BuildCookieOptions(bool persistent = true)
