@@ -62,6 +62,13 @@ public class Auction
 
     public string? EndReason { get; set; } // Reason auction ended: "natural", "buyout", "accepted", "cancelled"
 
+    // Approval workflow
+    [BsonRepresentation(BsonType.ObjectId)]
+    public string? ApprovedBy { get; set; }       // AdminId who approved
+    public DateTime? ApprovedAt { get; set; }
+    public string? RejectionReason { get; set; }   // Reason for rejection
+    public DateTime? SubmittedAt { get; set; }     // When seller submitted for review
+
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;

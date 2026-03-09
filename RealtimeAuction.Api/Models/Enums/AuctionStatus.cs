@@ -7,5 +7,7 @@ public enum AuctionStatus
     Pending = 2,   // Chờ xử lý (sau khi kết thúc)
     Completed = 3, // Hoàn thành (đã có người thắng)
     Cancelled = 4, // Đã hủy
-    Failed = 5     // Thất bại (không có người đấu giá)
+    Failed = 5,            // Thất bại (không có người đấu giá)
+    PendingApproval = 6,   // Chờ admin duyệt
+    Rejected = 7           // Admin từ chối
 }

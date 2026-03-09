@@ -161,6 +161,184 @@ public class AuctionController : ControllerBase
         }
     }
 
+    // ══════════ APPROVAL WORKFLOW ══════════
+
+    [HttpPost("{id}/submit-for-approval")]
+    public async Task<IActionResult> SubmitForApproval(string id)
+    {
+        try
+        {
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (string.IsNullOrEmpty(userId))
+                return Unauthorized(new { message = "User not authenticated" });
+
+            var auction = await _auctionRepository.GetByIdAsync(id);
+            if (auction == null)
+                return NotFound(new { message = "Auction not found" });
+            if (auction.SellerId != userId)
+                return Forbid();
+            if (auction.Status != AuctionStatus.Draft && auction.Status != AuctionStatus.Rejected)
+                return BadRequest(new { message = "Chỉ có thể gửi duyệt từ trạng thái Nháp hoặc Bị từ chối" });
+
+            auction.Status = AuctionStatus.PendingApproval;
+            auction.SubmittedAt = DateTime.UtcNow;
+            auction.RejectionReason = null; // clear previous rejection
+            await _auctionRepository.UpdateAsync(auction);
+
+            _logger.LogInformation("Auction {Id} submitted for approval by {UserId}", id, userId);
+            return Ok(new { message = "Đã gửi yêu cầu duyệt thành công" });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error submitting auction for approval");
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
+    [HttpPost("{id}/approve")]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> ApproveAuction(string id)
+    {
+        try
+        {
+            var adminId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (string.IsNullOrEmpty(adminId))
+                return Unauthorized(new { message = "Admin not authenticated" });
+
+            var auction = await _auctionRepository.GetByIdAsync(id);
+            if (auction == null)
+                return NotFound(new { message = "Auction not found" });
+            if (auction.Status != AuctionStatus.PendingApproval)
+                return BadRequest(new { message = "Chỉ có thể duyệt auction đang chờ duyệt" });
+
+            auction.Status = AuctionStatus.Active;
+            auction.ApprovedBy = adminId;
+            auction.ApprovedAt = DateTime.UtcNow;
+            await _auctionRepository.UpdateAsync(auction);
+
+            // Notify seller via email
+            try
+            {
+                var seller = await _userRepository.GetByIdAsync(auction.SellerId);
+                if (seller != null && !string.IsNullOrEmpty(seller.Email))
+                {
+                    await _emailService.SendAuctionApprovedEmailAsync(
+                        seller.Email,
+                        seller.FullName,
+                        auction.Title,
+                        auction.Id!
+                    );
+                }
+            }
+            catch (Exception emailEx)
+            {
+                _logger.LogError(emailEx, "Failed to send auction approved email");
+            }
+
+            // In-app notification
+            try
+            {
+                var notification = new Notification
+                {
+                    UserId = auction.SellerId,
+                    Title = "Đấu giá đã được duyệt",
+                    Message = $"Phiên đấu giá \"{auction.Title}\" đã được admin phê duyệt và đang hoạt động!",
+                    Type = "AuctionApproved",
+                    RelatedId = auction.Id,
+                    IsRead = false,
+                    CreatedAt = DateTime.UtcNow
+                };
+                await _notificationRepository.CreateAsync(notification);
+            }
+            catch (Exception notifEx)
+            {
+                _logger.LogError(notifEx, "Failed to create approval notification");
+            }
+
+            _logger.LogInformation("Auction {Id} approved by admin {AdminId}", id, adminId);
+            return Ok(new { message = "Đã duyệt phiên đấu giá thành công" });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error approving auction");
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
+    [HttpPost("{id}/reject")]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> RejectAuction(string id, [FromBody] RejectAuctionRequest request)
+    {
+        try
+        {
+            var adminId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (string.IsNullOrEmpty(adminId))
+                return Unauthorized(new { message = "Admin not authenticated" });
+
+            if (string.IsNullOrWhiteSpace(request?.Reason))
+                return BadRequest(new { message = "Vui lòng nhập lý do từ chối" });
+
+            var auction = await _auctionRepository.GetByIdAsync(id);
+            if (auction == null)
+                return NotFound(new { message = "Auction not found" });
+            if (auction.Status != AuctionStatus.PendingApproval)
+                return BadRequest(new { message = "Chỉ có thể từ chối auction đang chờ duyệt" });
+
+            auction.Status = AuctionStatus.Rejected;
+            auction.RejectionReason = request.Reason;
+            auction.ApprovedBy = null;
+            auction.ApprovedAt = null;
+            await _auctionRepository.UpdateAsync(auction);
+
+            // Notify seller via email
+            try
+            {
+                var seller = await _userRepository.GetByIdAsync(auction.SellerId);
+                if (seller != null && !string.IsNullOrEmpty(seller.Email))
+                {
+                    await _emailService.SendAuctionRejectedEmailAsync(
+                        seller.Email,
+                        seller.FullName,
+                        auction.Title,
+                        request.Reason
+                    );
+                }
+            }
+            catch (Exception emailEx)
+            {
+                _logger.LogError(emailEx, "Failed to send auction rejected email");
+            }
+
+            // In-app notification
+            try
+            {
+                var notification = new Notification
+                {
+                    UserId = auction.SellerId,
+                    Title = "Đấu giá bị từ chối",
+                    Message = $"Phiên đấu giá \"{auction.Title}\" đã bị từ chối. Lý do: {request.Reason}",
+                    Type = "AuctionRejected",
+                    RelatedId = auction.Id,
+                    IsRead = false,
+                    CreatedAt = DateTime.UtcNow
+                };
+                await _notificationRepository.CreateAsync(notification);
+            }
+            catch (Exception notifEx)
+            {
+                _logger.LogError(notifEx, "Failed to create rejection notification");
+            }
+
+            _logger.LogInformation("Auction {Id} rejected by admin {AdminId}. Reason: {Reason}", id, adminId, request.Reason);
+            return Ok(new { message = "Đã từ chối phiên đấu giá" });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error rejecting auction");
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
     [HttpPost]
     public async Task<IActionResult> CreateAuction([FromBody] CreateAuctionDto request)
     {
@@ -557,7 +735,10 @@ public class AuctionController : ControllerBase
             EndReason = auction.EndReason,
             CreatedAt = auction.CreatedAt,
             UpdatedAt = auction.UpdatedAt,
-            BidCount = bids.Count
+            BidCount = bids.Count,
+            RejectionReason = auction.RejectionReason,
+            ApprovedAt = auction.ApprovedAt,
+            SubmittedAt = auction.SubmittedAt
         };
     }
 
@@ -631,7 +812,10 @@ public class AuctionController : ControllerBase
                 EndReason = auction.EndReason,
                 CreatedAt = auction.CreatedAt,
                 UpdatedAt = auction.UpdatedAt,
-                BidCount = bids?.Count ?? 0
+                BidCount = bids?.Count ?? 0,
+                RejectionReason = auction.RejectionReason,
+                ApprovedAt = auction.ApprovedAt,
+                SubmittedAt = auction.SubmittedAt
             };
         }).ToList();
 
