@@ -51,4 +51,8 @@ public interface IEmailService
     // Auction Approval Email Notifications
     Task SendAuctionApprovedEmailAsync(string toEmail, string toName, string auctionTitle, string auctionId);
     Task SendAuctionRejectedEmailAsync(string toEmail, string toName, string auctionTitle, string reason);
+
+    // Dispute Email Notifications
+    Task SendDisputeOpenedEmailAsync(string toEmail, string toName, string productTitle, string openerName, string reason);
+    Task SendDisputeResolvedEmailAsync(string toEmail, string toName, string productTitle, string result, string adminNote);
 }

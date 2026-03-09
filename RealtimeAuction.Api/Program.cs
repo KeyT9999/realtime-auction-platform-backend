@@ -314,6 +314,7 @@ builder.Services.AddScoped<IWithdrawalRepository, WithdrawalRepository>();
 builder.Services.AddScoped<IBankAccountRepository, BankAccountRepository>();
 builder.Services.AddScoped<INotificationRepository, NotificationRepository>();
 builder.Services.AddScoped<IContactMessageRepository, ContactMessageRepository>();
+builder.Services.AddScoped<IDisputeRepository, DisputeRepository>();
 
 // Register Services
 builder.Services.AddScoped<IAuthService, AuthService>();
