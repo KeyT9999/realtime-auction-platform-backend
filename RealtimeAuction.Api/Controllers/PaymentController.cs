@@ -153,7 +153,12 @@ public class PaymentController : ControllerBase
     /// </summary>
     [HttpGet("transactions")]
     [Authorize]
-    public async Task<IActionResult> GetTransactions([FromQuery] int page = 1, [FromQuery] int limit = 20)
+    public async Task<IActionResult> GetTransactions(
+        [FromQuery] int page = 1,
+        [FromQuery] int limit = 20,
+        [FromQuery] int? type = null,
+        [FromQuery] DateTime? dateFrom = null,
+        [FromQuery] DateTime? dateTo = null)
     {
         try
         {
@@ -164,14 +169,25 @@ public class PaymentController : ControllerBase
             }
 
             var transactions = await _transactionRepository.GetByUserIdAsync(userId);
-            
-            // Pagination
-            var totalCount = transactions.Count;
-            var paginatedTransactions = transactions
-                .OrderByDescending(t => t.CreatedAt)
+
+            // Optional filters
+            var filtered = transactions.AsEnumerable();
+            if (type.HasValue)
+                filtered = filtered.Where(t => (int)t.Type == type.Value);
+            if (dateFrom.HasValue)
+                filtered = filtered.Where(t => t.CreatedAt >= dateFrom.Value);
+            if (dateTo.HasValue)
+            {
+                var end = dateTo.Value.Date.AddDays(1);
+                filtered = filtered.Where(t => t.CreatedAt < end);
+            }
+
+            var ordered = filtered.OrderByDescending(t => t.CreatedAt).ToList();
+            var totalCount = ordered.Count;
+            var paginatedTransactions = ordered
                 .Skip((page - 1) * limit)
                 .Take(limit)
-                .Select(t => new 
+                .Select(t => new
                 {
                     id = t.Id,
                     type = (int)t.Type,
@@ -186,8 +202,8 @@ public class PaymentController : ControllerBase
                 })
                 .ToList();
 
-            return Ok(new 
-            { 
+            return Ok(new
+            {
                 transactions = paginatedTransactions,
                 totalCount = totalCount,
                 page = page,

@@ -207,19 +207,20 @@ public class ProductController : ControllerBase
     }
 
     [HttpPost("upload-image")]
-    public async Task<IActionResult> UploadImage(IFormFile file)
+    [Consumes("multipart/form-data")]
+    public async Task<IActionResult> UploadImage([FromForm(Name = "file")] IFormFile? file)
     {
         try
         {
             if (file == null || file.Length == 0)
             {
-                return BadRequest(new { message = "No file uploaded" });
+                return BadRequest(new { message = "No file uploaded. Send form field 'file' with the image." });
             }
 
-            // Validate file count (single image)
-            if (file.Length > 5 * 1024 * 1024) // 5MB
+            const long maxBytes = 50 * 1024 * 1024; // 50MB
+            if (file.Length > maxBytes)
             {
-                return BadRequest(new { message = "File size exceeds 5MB limit" });
+                return BadRequest(new { message = "File size exceeds 50MB limit" });
             }
 
             // Copy to MemoryStream to avoid disposal issues
@@ -243,13 +244,14 @@ public class ProductController : ControllerBase
     }
 
     [HttpPost("upload-images")]
-    public async Task<IActionResult> UploadImages(List<IFormFile> files)
+    [Consumes("multipart/form-data")]
+    public async Task<IActionResult> UploadImages([FromForm(Name = "files")] List<IFormFile>? files)
     {
         try
         {
             if (files == null || files.Count == 0)
             {
-                return BadRequest(new { message = "No files uploaded" });
+                return BadRequest(new { message = "No files uploaded. Send form field 'files' with the images." });
             }
 
             if (files.Count > 5)
@@ -262,12 +264,13 @@ public class ProductController : ControllerBase
                 return BadRequest(new { message = "At least 1 image is required" });
             }
 
+            const long maxBytes = 50 * 1024 * 1024; // 50MB
             var imageData = new List<(Stream stream, string fileName)>();
             foreach (var file in files)
             {
-                if (file.Length > 5 * 1024 * 1024) // 5MB
+                if (file.Length > maxBytes)
                 {
-                    return BadRequest(new { message = $"File {file.FileName} exceeds 5MB limit" });
+                    return BadRequest(new { message = $"File {file.FileName} exceeds 50MB limit" });
                 }
                 
                 // Copy to MemoryStream to avoid disposal issues

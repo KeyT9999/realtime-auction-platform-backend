@@ -29,6 +29,7 @@ public class AuctionController : ControllerBase
     private readonly ITransactionRepository _transactionRepository;
     private readonly IEmailService _emailService;
     private readonly IHubContext<AuctionHub> _hubContext;
+    private readonly INotificationRepository _notificationRepository;
     private readonly ILogger<AuctionController> _logger;
     private readonly IConfiguration _configuration;
 
@@ -42,6 +43,8 @@ public class AuctionController : ControllerBase
         ITransactionRepository transactionRepository,
         IEmailService emailService,
         IHubContext<AuctionHub> hubContext,
+        INotificationRepository notificationRepository,
+        ILogger<AuctionController> logger)
         ILogger<AuctionController> logger,
         IConfiguration configuration)
     {
@@ -54,6 +57,7 @@ public class AuctionController : ControllerBase
         _transactionRepository = transactionRepository;
         _emailService = emailService;
         _hubContext = hubContext;
+        _notificationRepository = notificationRepository;
         _logger = logger;
         _configuration = configuration;
     }
@@ -228,6 +232,14 @@ public class AuctionController : ControllerBase
                 auctionId = response.Id,
                 message = $"Bạn đã tạo đấu giá: {response.Title}"
             });
+            await _notificationRepository.CreateAsync(new Notification
+            {
+                UserId = userId,
+                Type = "AuctionCreated",
+                Title = "Đấu giá đã tạo",
+                Message = $"Bạn đã tạo đấu giá: {response.Title}",
+                RelatedId = response.Id
+            });
 
             return CreatedAtAction(nameof(GetAuctionById), new { id = response.Id }, response);
         }
@@ -390,6 +402,14 @@ public class AuctionController : ControllerBase
                 auctionId = id,
                 status = (int)response.Status,
                 message = $"Trạng thái đấu giá \"{response.Title}\" -> {response.Status}"
+            });
+            await _notificationRepository.CreateAsync(new Notification
+            {
+                UserId = response.SellerId,
+                Type = "AuctionStatusChanged",
+                Title = "Trạng thái đấu giá",
+                Message = $"Trạng thái đấu giá \"{response.Title}\" -> {response.Status}",
+                RelatedId = id
             });
 
             await _hubContext.Clients.Group(GroupNames.Admins).SendAsync("AdminNotification", new

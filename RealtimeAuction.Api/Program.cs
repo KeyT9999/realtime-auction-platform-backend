@@ -92,7 +92,11 @@ if (string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("MAIL_HOST")) &
 
 var builder = WebApplication.CreateBuilder(args);
 
-
+// Cho phép upload file tới 50MB (Kestrel mặc định 28MB)
+builder.WebHost.ConfigureKestrel(serverOptions =>
+{
+    serverOptions.Limits.MaxRequestBodySize = 50 * 1024 * 1024;
+});
 
 // Configure MongoDB Settings
 var mongoDbSettings = new MongoDbSettings
@@ -308,6 +312,8 @@ builder.Services.AddScoped<IOrderRepository, OrderRepository>();
 builder.Services.AddScoped<IReviewRepository, ReviewRepository>();
 builder.Services.AddScoped<IWithdrawalRepository, WithdrawalRepository>();
 builder.Services.AddScoped<IBankAccountRepository, BankAccountRepository>();
+builder.Services.AddScoped<INotificationRepository, NotificationRepository>();
+builder.Services.AddScoped<IContactMessageRepository, ContactMessageRepository>();
 
 // Register Services
 builder.Services.AddScoped<IAuthService, AuthService>();
