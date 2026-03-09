@@ -219,5 +219,54 @@ public class AuctionRepository : IAuctionRepository
 
         return (items, totalCount);
     }
+    public async Task<List<Auction>> GetSimilarAuctionsAsync(string auctionId, string categoryId, decimal currentPrice, int limit = 8)
+    {
+        var fb = Builders<Auction>.Filter;
+
+        // Exclude current auction and cancelled auctions
+        var baseFilter = fb.And(
+            fb.Ne(a => a.Id, auctionId),
+            fb.Ne(a => a.Status, AuctionStatus.Cancelled)
+        );
+
+        // Primary: same category
+        var sameCategoryFilter = fb.And(baseFilter, fb.Eq(a => a.CategoryId, categoryId));
+        var sameCategoryResults = await _auctions
+            .Find(sameCategoryFilter)
+            .SortByDescending(a => a.CreatedAt)
+            .Limit(limit)
+            .ToListAsync();
+        // Post-sort: Active auctions first
+        sameCategoryResults = sameCategoryResults
+            .OrderByDescending(a => a.Status == AuctionStatus.Active ? 1 : 0)
+            .ThenByDescending(a => a.CreatedAt)
+            .ToList();
+
+        if (sameCategoryResults.Count >= limit)
+            return sameCategoryResults;
+
+        // Secondary: similar price range (±50%), different category
+        var remaining = limit - sameCategoryResults.Count;
+        var minPrice = currentPrice * 0.5m;
+        var maxPrice = currentPrice * 1.5m;
+        var existingIds = sameCategoryResults.Select(a => a.Id).ToList();
+        existingIds.Add(auctionId);
+
+        var priceFilter = fb.And(
+            fb.Nin(a => a.Id, existingIds),
+            fb.Ne(a => a.Status, AuctionStatus.Cancelled),
+            fb.Gte(a => a.CurrentPrice, minPrice),
+            fb.Lte(a => a.CurrentPrice, maxPrice)
+        );
+
+        var priceResults = await _auctions
+            .Find(priceFilter)
+            .SortByDescending(a => a.CreatedAt)
+            .Limit(remaining)
+            .ToListAsync();
+
+        sameCategoryResults.AddRange(priceResults);
+        return sameCategoryResults;
+    }
 
 }
