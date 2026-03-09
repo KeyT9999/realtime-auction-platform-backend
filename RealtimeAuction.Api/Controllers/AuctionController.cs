@@ -44,7 +44,6 @@ public class AuctionController : ControllerBase
         IEmailService emailService,
         IHubContext<AuctionHub> hubContext,
         INotificationRepository notificationRepository,
-        ILogger<AuctionController> logger)
         ILogger<AuctionController> logger,
         IConfiguration configuration)
     {
@@ -120,6 +119,44 @@ public class AuctionController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error getting auction by ID");
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
+    [HttpGet("{id}/similar")]
+    [AllowAnonymous]
+    public async Task<IActionResult> GetSimilarAuctions(string id, [FromQuery] int limit = 8)
+    {
+        try
+        {
+            var auction = await _auctionRepository.GetByIdAsync(id);
+            if (auction == null)
+            {
+                return NotFound(new { message = "Auction not found" });
+            }
+
+            if (limit < 1) limit = 4;
+            if (limit > 20) limit = 20;
+
+            var similarAuctions = await _auctionRepository.GetSimilarAuctionsAsync(
+                id,
+                auction.CategoryId,
+                auction.CurrentPrice,
+                limit
+            );
+
+            var results = new List<object>();
+            foreach (var a in similarAuctions)
+            {
+                var dto = await MapToResponseDto(a);
+                results.Add(dto);
+            }
+
+            return Ok(results);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting similar auctions");
             return BadRequest(new { message = ex.Message });
         }
     }

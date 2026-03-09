@@ -28,4 +28,5 @@ public interface IAuctionRepository
         string sortOrder,
         int page,
         int pageSize);
+    Task<List<Auction>> GetSimilarAuctionsAsync(string auctionId, string categoryId, decimal currentPrice, int limit = 8);
 }
