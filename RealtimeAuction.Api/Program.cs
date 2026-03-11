@@ -395,6 +395,7 @@ builder.Services.AddFluentValidationAutoValidation();
 builder.Services.AddValidatorsFromAssemblyContaining<Program>();
 
 // Add Background Services
+builder.Services.AddHostedService<RealtimeAuction.Api.BackgroundServices.AuctionStartBackgroundService>();
 builder.Services.AddHostedService<RealtimeAuction.Api.BackgroundServices.AuctionEndBackgroundService>();
 builder.Services.AddHostedService<RealtimeAuction.Api.BackgroundServices.AuctionEndingSoonNotificationService>();
 builder.Services.AddHostedService<RealtimeAuction.Api.BackgroundServices.TransactionReminderService>();

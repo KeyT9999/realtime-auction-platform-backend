@@ -211,9 +211,10 @@ public class AuctionController : ControllerBase
             if (auction.Status != AuctionStatus.PendingApproval)
                 return BadRequest(new { message = "Chỉ có thể duyệt auction đang chờ duyệt" });
 
-            auction.Status = AuctionStatus.Active;
+            var now = DateTime.UtcNow;
+            auction.Status = auction.StartTime <= now ? AuctionStatus.Active : AuctionStatus.Pending;
             auction.ApprovedBy = adminId;
-            auction.ApprovedAt = DateTime.UtcNow;
+            auction.ApprovedAt = now;
             await _auctionRepository.UpdateAsync(auction);
 
             // Notify seller via email
@@ -403,11 +404,9 @@ public class AuctionController : ControllerBase
                 return BadRequest(new { message = "End time must be after start time" });
             }
 
-            // Determine initial status based on start time
-            var now = DateTime.UtcNow;
-            var initialStatus = request.StartTime <= now 
-                ? AuctionStatus.Active  // Start immediately if start time has passed
-                : AuctionStatus.Pending;  // Scheduled for future - will be activated by background service
+            // Determine initial status
+            // Always set to Draft so that submitForApproval can process it.
+            var initialStatus = AuctionStatus.Draft;
 
             var auction = new Auction
             {
