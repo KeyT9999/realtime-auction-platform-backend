@@ -27,6 +27,7 @@ public class AuctionController : ControllerBase
     private readonly IBidRepository _bidRepository;
     private readonly IBidService _bidService;
     private readonly ITransactionRepository _transactionRepository;
+    private readonly IOrderService _orderService;
     private readonly IEmailService _emailService;
     private readonly IHubContext<AuctionHub> _hubContext;
     private readonly INotificationRepository _notificationRepository;
@@ -41,6 +42,7 @@ public class AuctionController : ControllerBase
         IBidRepository bidRepository,
         IBidService bidService,
         ITransactionRepository transactionRepository,
+        IOrderService orderService,
         IEmailService emailService,
         IHubContext<AuctionHub> hubContext,
         INotificationRepository notificationRepository,
@@ -54,6 +56,7 @@ public class AuctionController : ControllerBase
         _bidRepository = bidRepository;
         _bidService = bidService;
         _transactionRepository = transactionRepository;
+        _orderService = orderService;
         _emailService = emailService;
         _hubContext = hubContext;
         _notificationRepository = notificationRepository;
@@ -404,6 +407,11 @@ public class AuctionController : ControllerBase
                 return BadRequest(new { message = "End time must be after start time" });
             }
 
+            // Normalize times to UTC to avoid timezone mismatches across clients/servers.
+            // Frontend usually sends ISO with 'Z' (UTC), but we guard for Unspecified/Local values.
+            var startUtc = request.StartTime.Kind == DateTimeKind.Utc ? request.StartTime : request.StartTime.ToUniversalTime();
+            var endUtc = request.EndTime.Kind == DateTimeKind.Utc ? request.EndTime : request.EndTime.ToUniversalTime();
+
             // Determine initial status
             // Always set to Draft so that submitForApproval can process it.
             var initialStatus = AuctionStatus.Draft;
@@ -415,8 +423,8 @@ public class AuctionController : ControllerBase
                 StartingPrice = request.StartingPrice,
                 CurrentPrice = request.StartingPrice,
                 ReservePrice = request.ReservePrice,
-                StartTime = request.StartTime,
-                EndTime = request.EndTime,
+                StartTime = startUtc,
+                EndTime = endUtc,
                 Duration = request.Duration,
                 Status = initialStatus,
                 SellerId = userId,
@@ -498,9 +506,15 @@ public class AuctionController : ControllerBase
             if (request.ReservePrice.HasValue)
                 auction.ReservePrice = request.ReservePrice;
             if (request.StartTime.HasValue)
-                auction.StartTime = request.StartTime.Value;
+            {
+                var v = request.StartTime.Value;
+                auction.StartTime = v.Kind == DateTimeKind.Utc ? v : v.ToUniversalTime();
+            }
             if (request.EndTime.HasValue)
-                auction.EndTime = request.EndTime.Value;
+            {
+                var v = request.EndTime.Value;
+                auction.EndTime = v.Kind == DateTimeKind.Utc ? v : v.ToUniversalTime();
+            }
             if (request.Duration.HasValue)
                 auction.Duration = request.Duration.Value;
             if (!string.IsNullOrEmpty(request.CategoryId))
@@ -857,13 +871,17 @@ public class AuctionController : ControllerBase
             }
 
             // Current price must be >= reserve price (if set)
-            if (auction.ReservePrice.HasValue && auction.CurrentPrice < auction.ReservePrice.Value)
-            {
-                return BadRequest(new { message = $"Current price ({auction.CurrentPrice:N0}) must reach reserve price ({auction.ReservePrice:N0}) to accept" });
-            }
-
             // Get highest bidder
             var highestBid = bids.OrderByDescending(b => b.Amount).First();
+
+            // Enforce reserve price against the actual highest bid amount (more reliable than CurrentPrice if it ever gets out of sync)
+            if (auction.ReservePrice.HasValue && highestBid.Amount < auction.ReservePrice.Value)
+            {
+                return BadRequest(new
+                {
+                    message = $"Giá hiện tại ({highestBid.Amount:N0}) chưa đạt reserve price ({auction.ReservePrice.Value:N0})"
+                });
+            }
 
             // Kiểm tra winner có hold balance đủ không
             var winner = await _userRepository.GetByIdAsync(highestBid.UserId);
@@ -932,6 +950,24 @@ public class AuctionController : ControllerBase
                     };
                     await _transactionRepository.CreateAsync(pendingTransaction);
                 }
+            }
+
+            // Tạo Order cho giao dịch (để hiển thị trong My Orders / My Sales)
+            try
+            {
+                var productImage = auction.Images?.FirstOrDefault();
+                await _orderService.CreateOrderFromAuctionAsync(
+                    id,
+                    highestBid.UserId,
+                    auction.SellerId,
+                    highestBid.Amount,
+                    auction.Title,
+                    productImage
+                );
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to create order for accepted auction {AuctionId}", id);
             }
 
             // Get winner info (reuse existing winner variable)
@@ -1076,6 +1112,24 @@ public class AuctionController : ControllerBase
                     CreatedAt = DateTime.UtcNow
                 };
                 await _transactionRepository.CreateAsync(pendingTransaction);
+            }
+
+            // Tạo Order cho giao dịch (để hiển thị trong My Orders / My Sales)
+            try
+            {
+                var productImage = auction.Images?.FirstOrDefault();
+                await _orderService.CreateOrderFromAuctionAsync(
+                    id,
+                    userId,
+                    auction.SellerId,
+                    auction.BuyoutPrice.Value,
+                    auction.Title,
+                    productImage
+                );
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to create order for buyout auction {AuctionId}", id);
             }
 
             // Notify via SignalR

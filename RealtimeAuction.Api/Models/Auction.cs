@@ -24,8 +24,10 @@ public class Auction
     [BsonRepresentation(BsonType.Decimal128)]
     public decimal? ReservePrice { get; set; } // Optional - does not enforce minimum sale price
 
+    [BsonDateTimeOptions(Kind = DateTimeKind.Utc)]
     public DateTime StartTime { get; set; }
 
+    [BsonDateTimeOptions(Kind = DateTimeKind.Utc)]
     public DateTime EndTime { get; set; }
 
     public int Duration { get; set; } // Stored in minutes, can be updated (e.g., when auto-extend occurs)
@@ -69,7 +71,9 @@ public class Auction
     public string? RejectionReason { get; set; }   // Reason for rejection
     public DateTime? SubmittedAt { get; set; }     // When seller submitted for review
 
+    [BsonDateTimeOptions(Kind = DateTimeKind.Utc)]
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
+    [BsonDateTimeOptions(Kind = DateTimeKind.Utc)]
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 }
