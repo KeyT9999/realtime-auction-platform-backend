@@ -328,6 +328,7 @@ builder.Services.AddScoped<IBidService, BidService>();
 builder.Services.AddScoped<IOrderService, OrderService>();
 builder.Services.AddScoped<IReviewService, ReviewService>();
 builder.Services.AddScoped<IWithdrawalService, WithdrawalService>();
+builder.Services.AddScoped<IEscrowService, EscrowService>();
 
 // Configure PayOS
 builder.Services.Configure<PayOsSettings>(options =>
@@ -400,6 +401,7 @@ builder.Services.AddHostedService<RealtimeAuction.Api.BackgroundServices.Auction
 builder.Services.AddHostedService<RealtimeAuction.Api.BackgroundServices.AuctionEndingSoonNotificationService>();
 builder.Services.AddHostedService<RealtimeAuction.Api.BackgroundServices.TransactionReminderService>();
 builder.Services.AddHostedService<RealtimeAuction.Api.BackgroundServices.WithdrawalReminderService>();
+builder.Services.AddHostedService<RealtimeAuction.Api.BackgroundServices.EscrowAutoReleaseService>();
 
 // Add SignalR
 builder.Services.AddSignalR();

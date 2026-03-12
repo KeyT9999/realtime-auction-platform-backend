@@ -58,4 +58,17 @@ public class OrderRepository : IOrderRepository
             .SortByDescending(o => o.CreatedAt)
             .ToListAsync();
     }
+
+    public async Task<IEnumerable<Order>> GetOrdersForAutoReleaseAsync()
+    {
+        var now = DateTime.UtcNow;
+        // Orders: đã giao hàng (Shipped), quá hạn auto-release, và chưa được release
+        return await _orders
+            .Find(o => o.Status == OrderStatus.Shipped
+                    && o.EscrowAutoReleaseAt != null
+                    && o.EscrowAutoReleaseAt <= now
+                    && o.EscrowReleasedAt == null)
+            .ToListAsync();
+    }
 }
+

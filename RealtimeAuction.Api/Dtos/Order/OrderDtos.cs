@@ -28,7 +28,19 @@ public class OrderDto
     public bool BuyerHasReviewed { get; set; }
     public bool SellerHasReviewed { get; set; }
     public bool CanReview { get; set; } // Calculated based on current user
+
+    // === ESCROW INFO ===
+    public decimal EscrowAmount { get; set; }
+    public DateTime? EscrowFrozenAt { get; set; }
+    public DateTime? EscrowAutoReleaseAt { get; set; }
+    public DateTime? EscrowReleasedAt { get; set; }
+    public string? EscrowReleaseReason { get; set; }
+    /// <summary>"Frozen" | "Released" | "Refunded" | "None"</summary>
+    public string EscrowStatus { get; set; } = "None";
+    /// <summary>Số ngày còn lại đến auto-release (null nếu đã release hoặc chưa shipped)</summary>
+    public int? DaysUntilAutoRelease { get; set; }
 }
+
 
 public class ShipOrderRequest
 {

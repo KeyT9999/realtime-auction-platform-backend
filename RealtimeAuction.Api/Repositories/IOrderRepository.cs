@@ -12,4 +12,7 @@ public interface IOrderRepository
     Task<Order> CreateAsync(Order order);
     Task UpdateAsync(Order order);
     Task<IEnumerable<Order>> GetByStatusAsync(OrderStatus status);
+    /// <summary>Lấy các Orders đã shipped, quá hạn auto-release và chưa được release</summary>
+    Task<IEnumerable<Order>> GetOrdersForAutoReleaseAsync();
 }
+
