@@ -205,6 +205,12 @@ public class OrderService : IOrderService
             return new OrderResult { Success = false, ErrorMessage = "Không thể hủy đơn hàng đã hoàn tất" };
         }
 
+        // Buyer cannot cancel shipped orders
+        if (order.BuyerId == userId && order.Status == OrderStatus.Shipped)
+        {
+            return new OrderResult { Success = false, ErrorMessage = "Người mua không thể hủy đơn hàng đang được vận chuyển. Vui lòng nhận hàng hoặc mở tranh chấp nếu có vấn đề." };
+        }
+
         // Cannot cancel already cancelled orders
         if (order.Status == OrderStatus.Cancelled)
         {
