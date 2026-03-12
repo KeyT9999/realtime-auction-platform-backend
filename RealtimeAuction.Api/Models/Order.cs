@@ -47,6 +47,23 @@ public class Order
     public bool BuyerHasReviewed { get; set; } = false;
     public bool SellerHasReviewed { get; set; } = false;
 
+    // === ESCROW METADATA ===
+    /// <summary>Số tiền đang bị đóng băng trong Escrow</summary>
+    [BsonRepresentation(BsonType.Decimal128)]
+    public decimal EscrowAmount { get; set; } = 0;
+
+    /// <summary>Thời điểm tiền bị đóng băng (khi Order được tạo sau khi thắng đấu giá)</summary>
+    public DateTime? EscrowFrozenAt { get; set; }
+
+    /// <summary>Hạn tự động giải phóng (7 ngày sau khi Seller đánh dấu đã giao hàng)</summary>
+    public DateTime? EscrowAutoReleaseAt { get; set; }
+
+    /// <summary>Thời điểm Escrow đã được giải phóng (release hoặc refund)</summary>
+    public DateTime? EscrowReleasedAt { get; set; }
+
+    /// <summary>Lý do giải phóng: "BuyerConfirmed" | "AutoRelease" | "AdminDecision_BuyerWins" | "AdminDecision_SellerWins" | "OrderCancelled"</summary>
+    public string? EscrowReleaseReason { get; set; }
+
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 }

@@ -19,19 +19,22 @@ public class DisputeController : ControllerBase
     private readonly IUserRepository _userRepo;
     private readonly INotificationRepository _notificationRepo;
     private readonly IEmailService _emailService;
+    private readonly IEscrowService _escrowService;
 
     public DisputeController(
         IDisputeRepository disputeRepo,
         IOrderRepository orderRepo,
         IUserRepository userRepo,
         INotificationRepository notificationRepo,
-        IEmailService emailService)
+        IEmailService emailService,
+        IEscrowService escrowService)
     {
         _disputeRepo = disputeRepo;
         _orderRepo = orderRepo;
         _userRepo = userRepo;
         _notificationRepo = notificationRepo;
         _emailService = emailService;
+        _escrowService = escrowService;
     }
 
     private string GetUserId() => User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "";
@@ -294,6 +297,29 @@ public class DisputeController : ControllerBase
         dispute.ResolvedAt = DateTime.UtcNow;
 
         await _disputeRepo.UpdateAsync(id, dispute);
+
+        // ═══ XỬ LÝ ESCROW DỰA TRÊN KẾT QUẢ PHÁN QUYẾT ═══
+        if (request.Resolution == DisputeStatus.ResolvedBuyerWins)
+        {
+            // Buyer thắng → Hoàn tiền Escrow về Buyer
+            var refundSuccess = await _escrowService.RefundEscrowToBuyerAsync(
+                dispute.OrderId, "AdminDecision_BuyerWins");
+            if (!refundSuccess)
+            {
+                // Log lỗi nhưng không fail request (dispute đã được resolve)
+                // Admin sẽ cần xử lý thủ công nếu Escrow đã bị release trước đó
+            }
+        }
+        else if (request.Resolution == DisputeStatus.ResolvedSellerWins)
+        {
+            // Seller thắng → Giải phóng Escrow sang Seller
+            var releaseSuccess = await _escrowService.ReleaseEscrowToSellerAsync(
+                dispute.OrderId, "AdminDecision_SellerWins");
+            if (!releaseSuccess)
+            {
+                // Log lỗi nhưng không fail request
+            }
+        }
 
         // Get names
         var admin = await _userRepo.GetByIdAsync(adminId);

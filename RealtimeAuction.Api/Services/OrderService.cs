@@ -12,6 +12,7 @@ public class OrderService : IOrderService
     private readonly ITransactionRepository _transactionRepository;
     private readonly IBidRepository _bidRepository;
     private readonly IEmailService _emailService;
+    private readonly IEscrowService _escrowService;
     private readonly ILogger<OrderService> _logger;
 
     public OrderService(
@@ -20,6 +21,7 @@ public class OrderService : IOrderService
         ITransactionRepository transactionRepository,
         IBidRepository bidRepository,
         IEmailService emailService,
+        IEscrowService escrowService,
         ILogger<OrderService> logger)
     {
         _orderRepository = orderRepository;
@@ -27,6 +29,7 @@ public class OrderService : IOrderService
         _transactionRepository = transactionRepository;
         _bidRepository = bidRepository;
         _emailService = emailService;
+        _escrowService = escrowService;
         _logger = logger;
     }
 
@@ -56,6 +59,13 @@ public class OrderService : IOrderService
         await _orderRepository.CreateAsync(order);
         
         _logger.LogInformation("Created order {OrderId} for auction {AuctionId}", order.Id, auctionId);
+
+        // Đóng băng Escrow ngay khi Order được tạo
+        var freezeSuccess = await _escrowService.FreezeEscrowAsync(order.Id!);
+        if (!freezeSuccess)
+        {
+            _logger.LogWarning("Failed to freeze escrow for order {OrderId}, will retry on next access", order.Id);
+        }
         
         return order;
     }
@@ -102,11 +112,14 @@ public class OrderService : IOrderService
         order.ShippingCarrier = request.ShippingCarrier;
         order.ShippingNote = request.ShippingNote;
         order.ShippedAt = DateTime.UtcNow;
+        // Đặt hạn auto-release Escrow: 7 ngày sau khi giao hàng
+        order.EscrowAutoReleaseAt = DateTime.UtcNow.AddDays(7);
         order.UpdatedAt = DateTime.UtcNow;
 
         await _orderRepository.UpdateAsync(order);
 
-        _logger.LogInformation("Order {OrderId} marked as shipped by seller {SellerId}", orderId, userId);
+        _logger.LogInformation("Order {OrderId} marked as shipped by seller {SellerId}, EscrowAutoReleaseAt={AutoRelease}",
+            orderId, userId, order.EscrowAutoReleaseAt);
 
         // Send email to buyer
         try
@@ -151,49 +164,24 @@ public class OrderService : IOrderService
             return new OrderResult { Success = false, ErrorMessage = "Đơn hàng chưa được gửi đi" };
         }
 
-        // Process payment transfer
-        var paymentResult = await ProcessPaymentTransferAsync(order);
-        if (!paymentResult)
+        // Kiểm tra đã release chưa (tránh double confirm)
+        if (order.EscrowReleasedAt.HasValue)
         {
-            return new OrderResult { Success = false, ErrorMessage = "Lỗi khi xử lý thanh toán" };
+            return new OrderResult { Success = false, ErrorMessage = "Đơn hàng đã được xác nhận trước đó" };
         }
 
-        order.Status = OrderStatus.Completed;
-        order.CompletedAt = DateTime.UtcNow;
-        order.UpdatedAt = DateTime.UtcNow;
-
-        await _orderRepository.UpdateAsync(order);
-
-        _logger.LogInformation("Order {OrderId} completed by buyer {BuyerId}", orderId, userId);
-
-        // Send emails to both parties
-        try
+        // Giải phóng Escrow → Seller thông qua EscrowService
+        var releaseResult = await _escrowService.ReleaseEscrowToSellerAsync(order.Id!, "BuyerConfirmed");
+        if (!releaseResult)
         {
-            var buyer = await _userRepository.GetByIdAsync(order.BuyerId);
-            var seller = await _userRepository.GetByIdAsync(order.SellerId);
-            var amountStr = FormatCurrency(order.Amount);
-            var dateStr = DateTime.UtcNow.ToString("dd/MM/yyyy HH:mm");
-
-            if (buyer != null && !string.IsNullOrEmpty(buyer.Email))
-            {
-                await _emailService.SendTransactionCompletedEmailAsync(
-                    buyer.Email, buyer.FullName, "Người mua",
-                    order.ProductTitle, amountStr, dateStr);
-            }
-
-            if (seller != null && !string.IsNullOrEmpty(seller.Email))
-            {
-                await _emailService.SendTransactionCompletedEmailAsync(
-                    seller.Email, seller.FullName, "Người bán",
-                    order.ProductTitle, amountStr, dateStr);
-            }
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to send transaction completed emails for order {OrderId}", orderId);
+            return new OrderResult { Success = false, ErrorMessage = "Lỗi khi giải phóng Escrow, vui lòng thử lại" };
         }
 
-        var dto = await MapToOrderDtoAsync(order);
+        // EscrowService đã update Order.Status = Completed, reload để lấy dto mới nhất
+        var updatedOrder = await _orderRepository.GetByIdAsync(orderId);
+        _logger.LogInformation("Order {OrderId} confirmed by buyer {BuyerId}, Escrow released to seller", orderId, userId);
+
+        var dto = await MapToOrderDtoAsync(updatedOrder ?? order);
         return new OrderResult { Success = true, Order = dto };
     }
 
@@ -223,24 +211,28 @@ public class OrderService : IOrderService
             return new OrderResult { Success = false, ErrorMessage = "Đơn hàng đã bị hủy" };
         }
 
-        // Refund buyer
-        var refundResult = await ProcessRefundAsync(order);
+        // Hoàn tiền Escrow → Buyer thông qua EscrowService
+        var refundResult = await _escrowService.RefundEscrowToBuyerAsync(order.Id!, "OrderCancelled");
         if (!refundResult)
         {
-            return new OrderResult { Success = false, ErrorMessage = "Lỗi khi xử lý hoàn tiền" };
+            return new OrderResult { Success = false, ErrorMessage = "Lỗi khi hoàn tiền Escrow, vui lòng thử lại" };
         }
 
-        order.Status = OrderStatus.Cancelled;
-        order.CancelledAt = DateTime.UtcNow;
-        order.CancelReason = reason;
-        order.CancelledBy = userId;
-        order.UpdatedAt = DateTime.UtcNow;
+        // EscrowService đã cập nhật Order.Status = Cancelled
+        // Cập nhật thêm thông tin cancel
+        var cancelledOrder = await _orderRepository.GetByIdAsync(orderId);
+        if (cancelledOrder != null)
+        {
+            cancelledOrder.CancelReason = reason;
+            cancelledOrder.CancelledBy = userId;
+            cancelledOrder.UpdatedAt = DateTime.UtcNow;
+            await _orderRepository.UpdateAsync(cancelledOrder);
+        }
 
-        await _orderRepository.UpdateAsync(order);
+        _logger.LogInformation("Order {OrderId} cancelled by user {UserId}, Escrow refunded to buyer", orderId, userId);
 
-        _logger.LogInformation("Order {OrderId} cancelled by user {UserId}", orderId, userId);
-
-        var dto = await MapToOrderDtoAsync(order);
+        var updatedOrder = await _orderRepository.GetByIdAsync(orderId);
+        var dto = await MapToOrderDtoAsync(updatedOrder ?? order);
         return new OrderResult { Success = true, Order = dto };
     }
 
@@ -436,7 +428,15 @@ public class OrderService : IOrderService
                 CreatedAt = order.CreatedAt,
                 BuyerHasReviewed = order.BuyerHasReviewed,
                 SellerHasReviewed = order.SellerHasReviewed,
-                CanReview = false // Will be set by controller based on current user
+                CanReview = false, // Will be set by controller based on current user
+                // Escrow fields
+                EscrowAmount = order.EscrowAmount,
+                EscrowFrozenAt = order.EscrowFrozenAt,
+                EscrowAutoReleaseAt = order.EscrowAutoReleaseAt,
+                EscrowReleasedAt = order.EscrowReleasedAt,
+                EscrowReleaseReason = order.EscrowReleaseReason,
+                EscrowStatus = GetEscrowStatus(order),
+                DaysUntilAutoRelease = GetDaysUntilAutoRelease(order)
             };
         }).ToList();
     }
@@ -469,7 +469,15 @@ public class OrderService : IOrderService
             CreatedAt = order.CreatedAt,
             BuyerHasReviewed = order.BuyerHasReviewed,
             SellerHasReviewed = order.SellerHasReviewed,
-            CanReview = false // Will be set by controller based on current user
+            CanReview = false, // Will be set by controller based on current user
+            // Escrow fields
+            EscrowAmount = order.EscrowAmount,
+            EscrowFrozenAt = order.EscrowFrozenAt,
+            EscrowAutoReleaseAt = order.EscrowAutoReleaseAt,
+            EscrowReleasedAt = order.EscrowReleasedAt,
+            EscrowReleaseReason = order.EscrowReleaseReason,
+            EscrowStatus = GetEscrowStatus(order),
+            DaysUntilAutoRelease = GetDaysUntilAutoRelease(order)
         };
     }
 
@@ -481,8 +489,30 @@ public class OrderService : IOrderService
             OrderStatus.Shipped => "Đang vận chuyển",
             OrderStatus.Completed => "Đã hoàn tất",
             OrderStatus.Cancelled => "Đã hủy / Hoàn tiền",
+            OrderStatus.Disputed => "Đang tranh chấp",
             _ => "Không xác định"
         };
+    }
+
+    private static string GetEscrowStatus(Order order)
+    {
+        if (order.EscrowReleasedAt.HasValue)
+        {
+            // Refunded = tiền về buyer (hủy đơn hoặc admin phán buyer thắng)
+            var reason = order.EscrowReleaseReason ?? "";
+            return reason == "OrderCancelled" || reason == "AdminDecision_BuyerWins"
+                ? "Refunded"
+                : "Released";
+        }
+        if (order.EscrowFrozenAt.HasValue) return "Frozen";
+        return "None";
+    }
+
+    private static int? GetDaysUntilAutoRelease(Order order)
+    {
+        if (!order.EscrowAutoReleaseAt.HasValue || order.EscrowReleasedAt.HasValue) return null;
+        var remaining = order.EscrowAutoReleaseAt.Value - DateTime.UtcNow;
+        return remaining.TotalDays > 0 ? (int)Math.Ceiling(remaining.TotalDays) : 0;
     }
 
     private static string FormatCurrency(decimal amount)
