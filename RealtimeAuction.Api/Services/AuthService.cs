@@ -198,7 +198,7 @@ namespace RealtimeAuction.Api.Services
                     {
                         Email = payload.Email,
                         FullName = payload.Name,
-                        PasswordHash = BCrypt.Net.BCrypt.HashPassword(Guid.NewGuid().ToString()), // Random password for Google users
+                        PasswordHash = BCrypt.Net.BCrypt.HashPassword(Guid.NewGuid().ToString(), 4), // Reduced work factor for Google users
                         Role = "User",
                         IsEmailVerified = true,
                         EmailVerifiedAt = DateTime.UtcNow,
