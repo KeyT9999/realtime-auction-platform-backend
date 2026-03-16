@@ -16,11 +16,16 @@ namespace RealtimeAuction.Api.Controllers
     public class AuthController : ControllerBase
     {
         private readonly IAuthService _authService;
+        private readonly ICaptchaVerificationService _captchaVerificationService;
         private readonly IHostEnvironment _env;
 
-        public AuthController(IAuthService authService, IHostEnvironment env)
+        public AuthController(
+            IAuthService authService,
+            ICaptchaVerificationService captchaVerificationService,
+            IHostEnvironment env)
         {
             _authService = authService;
+            _captchaVerificationService = captchaVerificationService;
             _env = env;
         }
 
@@ -30,6 +35,12 @@ namespace RealtimeAuction.Api.Controllers
         {
             try
             {
+                var captchaError = await VerifyCaptchaOrRejectAsync(request.CaptchaToken, "register");
+                if (captchaError != null)
+                {
+                    return captchaError;
+                }
+
                 var response = await _authService.RegisterAsync(request);
                 return Ok(response);
             }
@@ -45,12 +56,15 @@ namespace RealtimeAuction.Api.Controllers
         {
             try
             {
-                var response = await _authService.LoginAsync(request);
+                var captchaError = await VerifyCaptchaOrRejectAsync(request.CaptchaToken, "login");
+                if (captchaError != null)
+                {
+                    return captchaError;
+                }
 
-                // Set refresh token vào HttpOnly cookie
+                var response = await _authService.LoginAsync(request);
                 SetRefreshTokenCookie(response.RefreshToken);
 
-                // Chỉ trả access token trong body
                 return Ok(new
                 {
                     accessToken = response.AccessToken,
@@ -69,7 +83,7 @@ namespace RealtimeAuction.Api.Controllers
                 return BadRequest(new { message = ex.Message });
             }
         }
-        
+
         [HttpPost("google-login")]
         [EnableRateLimiting("auth")]
         public async Task<IActionResult> GoogleLogin([FromBody] GoogleLoginRequest request)
@@ -77,8 +91,6 @@ namespace RealtimeAuction.Api.Controllers
             try
             {
                 var response = await _authService.GoogleLoginAsync(request);
-
-                // Set refresh token vào HttpOnly cookie
                 SetRefreshTokenCookie(response.RefreshToken);
 
                 return Ok(new
@@ -105,7 +117,6 @@ namespace RealtimeAuction.Api.Controllers
         {
             try
             {
-                // Ưu tiên lấy refresh token từ cookie
                 var cookieRefreshToken = Request.Cookies["refreshToken"];
                 var refreshToken = cookieRefreshToken ?? request.RefreshToken;
 
@@ -119,7 +130,6 @@ namespace RealtimeAuction.Api.Controllers
                     RefreshToken = refreshToken
                 });
 
-                // Rotate refresh token trong cookie
                 SetRefreshTokenCookie(response.RefreshToken);
 
                 return Ok(new
@@ -147,13 +157,17 @@ namespace RealtimeAuction.Api.Controllers
         {
             try
             {
+                var captchaError = await VerifyCaptchaOrRejectAsync(request.CaptchaToken, "forgot_password");
+                if (captchaError != null)
+                {
+                    return captchaError;
+                }
+
                 await _authService.ForgotPasswordAsync(request);
-                // Always return success to prevent email enumeration
                 return Ok(new { message = "If the email exists, a password reset link has been sent." });
             }
             catch (Exception)
             {
-                // Still return success to prevent email enumeration
                 return Ok(new { message = "If the email exists, a password reset link has been sent." });
             }
         }
@@ -182,7 +196,7 @@ namespace RealtimeAuction.Api.Controllers
             try
             {
                 await _authService.ResetPasswordWithOtpAsync(request);
-                return Ok(new { message = "Mật khẩu đã được đặt lại thành công." });
+                return Ok(new { message = "Mat khau da duoc dat lai thanh cong." });
             }
             catch (AuthenticationException ex)
             {
@@ -201,7 +215,7 @@ namespace RealtimeAuction.Api.Controllers
             try
             {
                 await _authService.ResendPasswordResetOtpAsync(request.Email);
-                return Ok(new { message = "Mã OTP mới đã được gửi đến email của bạn." });
+                return Ok(new { message = "Ma OTP moi da duoc gui den email cua ban." });
             }
             catch (Exception ex)
             {
@@ -266,7 +280,7 @@ namespace RealtimeAuction.Api.Controllers
         {
             try
             {
-                var userId = User.FindFirstValue(System.Security.Claims.ClaimTypes.NameIdentifier);
+                var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
                 if (string.IsNullOrEmpty(userId))
                 {
                     return Unauthorized(new { message = "User not authenticated" });
@@ -275,7 +289,7 @@ namespace RealtimeAuction.Api.Controllers
                 await _authService.ChangePasswordAsync(userId, request);
                 return Ok(new { message = "Password changed successfully." });
             }
-            catch (System.Security.Authentication.AuthenticationException ex)
+            catch (AuthenticationException ex)
             {
                 return Unauthorized(new { message = ex.Message });
             }
@@ -297,7 +311,6 @@ namespace RealtimeAuction.Api.Controllers
                 }
 
                 DeleteRefreshTokenCookie();
-
                 return Ok(new { message = "Logged out successfully." });
             }
             catch (Exception ex)
@@ -306,23 +319,21 @@ namespace RealtimeAuction.Api.Controllers
             }
         }
 
-        /// <summary>
-        /// DEV ONLY: Seed 2 test accounts (user + admin) with email already verified.
-        /// POST /api/auth/dev-seed
-        /// </summary>
         [HttpPost("dev-seed")]
         public async Task<IActionResult> DevSeed([FromServices] IMongoDatabase db)
         {
             if (!_env.IsDevelopment())
+            {
                 return NotFound();
+            }
 
             var users = db.GetCollection<User>("Users");
             var results = new List<object>();
 
             var seeds = new[]
             {
-                new { Email = "user@test.com",  Password = "Test@1234",  FullName = "Test User",  Role = "User"  },
-                new { Email = "admin@test.com", Password = "Admin@1234", FullName = "Admin User", Role = "Admin" },
+                new { Email = "user@test.com", Password = "Test@1234", FullName = "Test User", Role = "User" },
+                new { Email = "admin@test.com", Password = "Admin@1234", FullName = "Admin User", Role = "Admin" }
             };
 
             foreach (var seed in seeds)
@@ -330,12 +341,13 @@ namespace RealtimeAuction.Api.Controllers
                 var existing = await users.Find(u => u.Email == seed.Email).FirstOrDefaultAsync();
                 if (existing != null)
                 {
-                    var upd = Builders<User>.Update
+                    var update = Builders<User>.Update
                         .Set(u => u.IsEmailVerified, true)
                         .Set(u => u.EmailVerifiedAt, DateTime.UtcNow)
                         .Set(u => u.Role, seed.Role)
                         .Set(u => u.UpdatedAt, DateTime.UtcNow);
-                    await users.UpdateOneAsync(u => u.Email == seed.Email, upd);
+
+                    await users.UpdateOneAsync(u => u.Email == seed.Email, update);
                     results.Add(new { seed.Email, seed.Role, status = "updated" });
                 }
                 else
@@ -350,8 +362,9 @@ namespace RealtimeAuction.Api.Controllers
                         EmailVerifiedAt = DateTime.UtcNow,
                         CreatedAt = DateTime.UtcNow,
                         UpdatedAt = DateTime.UtcNow,
-                        AvailableBalance = 10_000_000,
+                        AvailableBalance = 10_000_000
                     };
+
                     await users.InsertOneAsync(user);
                     results.Add(new { seed.Email, seed.Role, status = "created" });
                 }
@@ -362,14 +375,15 @@ namespace RealtimeAuction.Api.Controllers
 
         private CookieOptions BuildCookieOptions(bool persistent = true)
         {
-            // Dev: cross-port -> SameSite=None; Prod: Lax
-            var sameSite = _env.IsDevelopment() ? SameSiteMode.None : SameSiteMode.Lax;
+            var isHttps = !_env.IsDevelopment()
+                || Request.IsHttps
+                || string.Equals(Request.Headers["X-Forwarded-Proto"], "https", StringComparison.OrdinalIgnoreCase);
 
             return new CookieOptions
             {
                 HttpOnly = true,
-                Secure = true, // yêu cầu HTTPS để dùng SameSite=None
-                SameSite = sameSite,
+                Secure = isHttps,
+                SameSite = isHttps ? SameSiteMode.None : SameSiteMode.Lax,
                 Expires = persistent ? DateTimeOffset.UtcNow.AddDays(7) : null,
                 Path = "/"
             };
@@ -382,8 +396,7 @@ namespace RealtimeAuction.Api.Controllers
                 return;
             }
 
-            var options = BuildCookieOptions();
-            Response.Cookies.Append("refreshToken", refreshToken, options);
+            Response.Cookies.Append("refreshToken", refreshToken, BuildCookieOptions());
         }
 
         private void DeleteRefreshTokenCookie()
@@ -391,6 +404,22 @@ namespace RealtimeAuction.Api.Controllers
             var options = BuildCookieOptions();
             options.Expires = DateTimeOffset.UtcNow.AddDays(-1);
             Response.Cookies.Delete("refreshToken", options);
+        }
+
+        private async Task<IActionResult?> VerifyCaptchaOrRejectAsync(string? captchaToken, string action)
+        {
+            var result = await _captchaVerificationService.VerifyAsync(
+                captchaToken,
+                action,
+                HttpContext.Connection.RemoteIpAddress?.ToString(),
+                HttpContext.RequestAborted);
+
+            if (result.Success)
+            {
+                return null;
+            }
+
+            return StatusCode(result.StatusCode, new { message = result.ErrorMessage });
         }
     }
 }

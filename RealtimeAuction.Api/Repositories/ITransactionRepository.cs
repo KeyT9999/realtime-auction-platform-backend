@@ -13,4 +13,11 @@ public interface ITransactionRepository
     Task<Transaction?> GetByIdAsync(string id);
     Task<List<Transaction>> GetByPayOsOrderCodeAsync(long orderCode);
     Task<List<Transaction>> GetByAuctionIdAsync(string auctionId);
+    Task<(List<Transaction> Items, int TotalCount)> GetPagedByUserIdAsync(
+        string userId,
+        int page,
+        int limit,
+        TransactionType? type = null,
+        DateTime? dateFrom = null,
+        DateTime? dateTo = null);
 }

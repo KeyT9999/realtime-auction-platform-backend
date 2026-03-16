@@ -8,7 +8,10 @@ public class ForgotPasswordRequestValidator : AbstractValidator<ForgotPasswordRe
     public ForgotPasswordRequestValidator()
     {
         RuleFor(x => x.Email)
-            .NotEmpty().WithMessage("Email không được để trống.")
-            .EmailAddress().WithMessage("Email không đúng định dạng.");
+            .NotEmpty().WithMessage("Email khong duoc de trong.")
+            .EmailAddress().WithMessage("Email khong dung dinh dang.");
+
+        RuleFor(x => x.CaptchaToken)
+            .NotEmpty().WithMessage("CAPTCHA token khong duoc de trong.");
     }
 }

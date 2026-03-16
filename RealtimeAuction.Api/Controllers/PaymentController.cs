@@ -2,6 +2,7 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using RealtimeAuction.Api.Dtos.Payment;
+using RealtimeAuction.Api.Models.Enums;
 using RealtimeAuction.Api.Repositories;
 using RealtimeAuction.Api.Services;
 
@@ -96,7 +97,13 @@ public class PaymentController : ControllerBase
     {
         try
         {
-            var result = await _paymentService.GetDepositStatusAsync(orderCode);
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (string.IsNullOrEmpty(userId))
+            {
+                return Unauthorized(new { message = "Vui lÃ²ng Ä‘Äƒng nháº­p" });
+            }
+
+            var result = await _paymentService.GetDepositStatusAsync(userId, orderCode);
             
             if (result == null)
             {
@@ -168,25 +175,17 @@ public class PaymentController : ControllerBase
                 return Unauthorized(new { message = "Vui lòng đăng nhập" });
             }
 
-            var transactions = await _transactionRepository.GetByUserIdAsync(userId);
+            var dateToExclusive = dateTo?.Date.AddDays(1);
+            var transactionType = type.HasValue ? (TransactionType?)type.Value : null;
+            var result = await _transactionRepository.GetPagedByUserIdAsync(
+                userId,
+                page,
+                limit,
+                transactionType,
+                dateFrom,
+                dateToExclusive);
 
-            // Optional filters
-            var filtered = transactions.AsEnumerable();
-            if (type.HasValue)
-                filtered = filtered.Where(t => (int)t.Type == type.Value);
-            if (dateFrom.HasValue)
-                filtered = filtered.Where(t => t.CreatedAt >= dateFrom.Value);
-            if (dateTo.HasValue)
-            {
-                var end = dateTo.Value.Date.AddDays(1);
-                filtered = filtered.Where(t => t.CreatedAt < end);
-            }
-
-            var ordered = filtered.OrderByDescending(t => t.CreatedAt).ToList();
-            var totalCount = ordered.Count;
-            var paginatedTransactions = ordered
-                .Skip((page - 1) * limit)
-                .Take(limit)
+            var paginatedTransactions = result.Items
                 .Select(t => new
                 {
                     id = t.Id,
@@ -205,10 +204,10 @@ public class PaymentController : ControllerBase
             return Ok(new
             {
                 transactions = paginatedTransactions,
-                totalCount = totalCount,
+                totalCount = result.TotalCount,
                 page = page,
                 limit = limit,
-                totalPages = (int)Math.Ceiling(totalCount / (double)limit)
+                totalPages = (int)Math.Ceiling(result.TotalCount / (double)limit)
             });
         }
         catch (Exception ex)

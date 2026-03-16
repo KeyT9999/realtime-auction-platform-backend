@@ -38,6 +38,12 @@ public class Transaction
     [BsonRepresentation(BsonType.Int32)]
     public TransactionStatus Status { get; set; } = TransactionStatus.Pending;
 
+    public string? ProcessingToken { get; set; }
+
+    public DateTime? ProcessingStartedAt { get; set; }
+
+    public DateTime? ProcessedAt { get; set; }
+
     public bool BuyerConfirmed { get; set; } = false;
 
     public bool SellerConfirmed { get; set; } = false;

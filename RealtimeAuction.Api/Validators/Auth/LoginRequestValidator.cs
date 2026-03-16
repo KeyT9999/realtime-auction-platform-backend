@@ -8,10 +8,13 @@ public class LoginRequestValidator : AbstractValidator<LoginRequest>
     public LoginRequestValidator()
     {
         RuleFor(x => x.Email)
-            .NotEmpty().WithMessage("Email không được để trống.")
-            .EmailAddress().WithMessage("Email không đúng định dạng.");
+            .NotEmpty().WithMessage("Email khong duoc de trong.")
+            .EmailAddress().WithMessage("Email khong dung dinh dang.");
 
         RuleFor(x => x.Password)
-            .NotEmpty().WithMessage("Mật khẩu không được để trống.");
+            .NotEmpty().WithMessage("Mat khau khong duoc de trong.");
+
+        RuleFor(x => x.CaptchaToken)
+            .NotEmpty().WithMessage("CAPTCHA token khong duoc de trong.");
     }
 }

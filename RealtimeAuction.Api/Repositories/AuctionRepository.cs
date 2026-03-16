@@ -1,4 +1,5 @@
 using MongoDB.Driver;
+using RealtimeAuction.Api.Helpers;
 using RealtimeAuction.Api.Models;
 using RealtimeAuction.Api.Models.Enums;
 
@@ -126,9 +127,10 @@ public class AuctionRepository : IAuctionRepository
         // Keyword search (title or description)
         if (!string.IsNullOrEmpty(keyword))
         {
+            var escapedKeyword = MongoRegexHelper.EscapeLiteralPattern(keyword);
             var keywordFilter = filterBuilder.Or(
-                filterBuilder.Regex(a => a.Title, new MongoDB.Bson.BsonRegularExpression(keyword, "i")),
-                filterBuilder.Regex(a => a.Description, new MongoDB.Bson.BsonRegularExpression(keyword, "i"))
+                filterBuilder.Regex(a => a.Title, new MongoDB.Bson.BsonRegularExpression(escapedKeyword, "i")),
+                filterBuilder.Regex(a => a.Description, new MongoDB.Bson.BsonRegularExpression(escapedKeyword, "i"))
             );
             filters.Add(keywordFilter);
         }

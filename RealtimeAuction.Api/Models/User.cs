@@ -40,6 +40,8 @@ namespace RealtimeAuction.Api.Models
         [BsonRepresentation(BsonType.Decimal128)]
         public decimal HeldBalance { get; set; } = 0; // Tiền đang hold cho withdrawal request
 
+        public List<long> AppliedDepositOrderCodes { get; set; } = new();
+
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
         public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;

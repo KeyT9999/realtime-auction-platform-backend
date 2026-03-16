@@ -7,4 +7,7 @@ public class ForgotPasswordRequest
     [Required]
     [EmailAddress]
     public string Email { get; set; } = null!;
+
+    [Required]
+    public string CaptchaToken { get; set; } = null!;
 }

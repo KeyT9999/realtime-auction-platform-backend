@@ -1,6 +1,5 @@
 using MongoDB.Driver;
 using RealtimeAuction.Api.Models;
-using RealtimeAuction.Api.Settings;
 
 namespace RealtimeAuction.Api.Repositories;
 
@@ -8,10 +7,8 @@ public class UserRepository : IUserRepository
 {
     private readonly IMongoCollection<User> _users;
 
-    public UserRepository(MongoDbSettings mongoDbSettings)
+    public UserRepository(IMongoDatabase database)
     {
-        var client = new MongoClient(mongoDbSettings.ConnectionString);
-        var database = client.GetDatabase(mongoDbSettings.DatabaseName);
         _users = database.GetCollection<User>("Users");
     }
 

@@ -16,7 +16,9 @@ namespace RealtimeAuction.Api.Dtos.Auth
         [Required]
         public string FullName { get; set; } = null!;
 
-        // Mặc định là Link để backward compatible
+        // Default to Link to keep existing registration flow compatible.
         public VerificationMethod VerificationMethod { get; set; } = VerificationMethod.Link;
+
+        public string? CaptchaToken { get; set; }
     }
 }

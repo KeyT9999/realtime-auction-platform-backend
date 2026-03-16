@@ -9,7 +9,13 @@ namespace RealtimeAuction.Api.Models
         [BsonRepresentation(BsonType.ObjectId)]
         public string? Id { get; set; }
 
-        public string Token { get; set; } = null!;
+        // Legacy plaintext token kept only for backward compatibility with old sessions.
+        public string? Token { get; set; }
+
+        public string? TokenHash { get; set; }
+
+        [BsonIgnore]
+        public string PlainTextToken { get; set; } = string.Empty;
 
         public string UserId { get; set; } = null!;
 
