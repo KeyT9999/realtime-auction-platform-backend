@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using MongoDB.Driver;
 using RealtimeAuction.Api.Dtos.Bid;
 using RealtimeAuction.Api.Models;
 using RealtimeAuction.Api.Models.Enums;
@@ -16,16 +17,17 @@ public class BidService : IBidService
     private readonly ITransactionRepository _transactionRepository;
     private readonly IEmailService _emailService;
     private readonly ILogger<BidService> _logger;
+    private readonly IMongoClient _mongoClient;
+    private readonly IMongoCollection<User> _users;
+    private readonly IMongoCollection<Auction> _auctions;
+    private readonly IMongoCollection<Bid> _bids;
+    private readonly IMongoCollection<Transaction> _transactions;
 
     private static SemaphoreSlim GetAuctionLock(string auctionId)
     {
         return _auctionLocks.GetOrAdd(auctionId, _ => new SemaphoreSlim(1, 1));
     }
 
-    /// <summary>
-    /// Remove and dispose the lock for a completed/cancelled auction to prevent memory leak.
-    /// Call this from AuctionEndBackgroundService after auction processing is done.
-    /// </summary>
     public static void RemoveAuctionLock(string auctionId)
     {
         if (_auctionLocks.TryRemove(auctionId, out var semaphore))
@@ -39,6 +41,8 @@ public class BidService : IBidService
         IAuctionRepository auctionRepository,
         IUserRepository userRepository,
         ITransactionRepository transactionRepository,
+        IMongoClient mongoClient,
+        IMongoDatabase database,
         IEmailService emailService,
         ILogger<BidService> logger)
     {
@@ -46,6 +50,11 @@ public class BidService : IBidService
         _auctionRepository = auctionRepository;
         _userRepository = userRepository;
         _transactionRepository = transactionRepository;
+        _mongoClient = mongoClient;
+        _users = database.GetCollection<User>("Users");
+        _auctions = database.GetCollection<Auction>("Auctions");
+        _bids = database.GetCollection<Bid>("Bids");
+        _transactions = database.GetCollection<Transaction>("Transactions");
         _emailService = emailService;
         _logger = logger;
     }
@@ -54,6 +63,7 @@ public class BidService : IBidService
     {
         var semaphore = GetAuctionLock(request.AuctionId);
         await semaphore.WaitAsync();
+
         try
         {
             return await PlaceBidCoreAsync(userId, request);
@@ -69,170 +79,355 @@ public class BidService : IBidService
         var userTask = _userRepository.GetByIdAsync(userId);
         var auctionTask = _auctionRepository.GetByIdAsync(request.AuctionId);
         await Task.WhenAll(userTask, auctionTask);
+
         var user = userTask.Result;
         var auction = auctionTask.Result;
 
         if (user == null)
         {
-            return new BidResult { Success = false, ErrorMessage = "Người dùng không tồn tại" };
+            return new BidResult { Success = false, ErrorMessage = "Nguoi dung khong ton tai" };
         }
 
         if (auction == null)
         {
-            return new BidResult { Success = false, ErrorMessage = "Phiên đấu giá không tồn tại" };
+            return new BidResult { Success = false, ErrorMessage = "Phien dau gia khong ton tai" };
         }
 
         if (auction.Status != AuctionStatus.Active)
         {
-            return new BidResult { Success = false, ErrorMessage = "Phiên đấu giá không còn hoạt động" };
+            return new BidResult { Success = false, ErrorMessage = "Phien dau gia khong con hoat dong" };
         }
 
         if (auction.SellerId == userId)
         {
-            return new BidResult { Success = false, ErrorMessage = "Bạn không thể đấu giá sản phẩm của chính mình" };
+            return new BidResult { Success = false, ErrorMessage = "Ban khong the dau gia san pham cua chinh minh" };
         }
 
-        // Kiểm tra bid amount
         var minBid = auction.CurrentPrice + auction.BidIncrement;
         if (request.Amount < minBid)
         {
-            return new BidResult { Success = false, ErrorMessage = $"Giá đặt tối thiểu phải là {minBid:N0}đ" };
+            return new BidResult { Success = false, ErrorMessage = $"Gia dat toi thieu phai la {minBid:N0}d" };
         }
 
-        // Tìm bid trước đó của user trong auction này (nếu có)
-        var userBids = await _bidRepository.GetByAuctionIdAsync(request.AuctionId);
-        var previousUserBid = userBids
+        var auctionBids = await _bidRepository.GetByAuctionIdAsync(request.AuctionId);
+        var previousUserBid = auctionBids
             .Where(b => b.UserId == userId && !b.IsHoldReleased)
             .OrderByDescending(b => b.Amount)
             .FirstOrDefault();
 
-        // Tính số tiền cần hold
-        decimal holdAmount;
-        if (previousUserBid != null)
+        var holdAmount = previousUserBid != null
+            ? request.Amount - previousUserBid.HeldAmount
+            : request.Amount;
+
+        if (holdAmount < 0)
         {
-            // Nếu đã có bid trước, chỉ hold thêm phần chênh lệch
-            holdAmount = request.Amount - previousUserBid.HeldAmount;
-        }
-        else
-        {
-            // Bid đầu tiên trong auction này, hold toàn bộ
-            holdAmount = request.Amount;
+            return new BidResult { Success = false, ErrorMessage = "So tien hold khong hop le" };
         }
 
-        // Kiểm tra số dư khả dụng
         if (user.AvailableBalance < holdAmount)
         {
-            return new BidResult 
-            { 
-                Success = false, 
-                ErrorMessage = $"Số dư không đủ. Cần {holdAmount:N0}đ, hiện có {user.AvailableBalance:N0}đ" 
+            return new BidResult
+            {
+                Success = false,
+                ErrorMessage = $"So du khong du. Can {holdAmount:N0}d, hien co {user.AvailableBalance:N0}d"
             };
         }
 
-        // Tìm previous highest bidder để release hold
-        var previousHighestBid = userBids
+        var previousHighestBid = auctionBids
             .Where(b => b.UserId != userId && !b.IsHoldReleased)
             .OrderByDescending(b => b.Amount)
             .FirstOrDefault();
 
-        string? outbidUserId = previousHighestBid?.UserId;
+        var outbidUserId = previousHighestBid?.UserId;
+        var outbidHeldAmount = previousHighestBid != null
+            ? auctionBids
+                .Where(b => b.UserId == previousHighestBid.UserId && !b.IsHoldReleased)
+                .Select(b => b.HeldAmount)
+                .DefaultIfEmpty(previousHighestBid.HeldAmount)
+                .Max()
+            : 0m;
 
-        // === BẮT ĐẦU TRANSACTION ===
-        // TODO [ISSUE #5]: Wrap these operations in a MongoDB multi-document transaction 
-        // using IMongoClient.StartSessionAsync() to ensure atomicity.
-        // If any step fails (e.g. CreateAsync for transaction record), the balance changes
-        // will be rolled back automatically. Requires refactoring repositories to accept 
-        // IClientSessionHandle parameter.
-        
-        // 1. Hold tiền của bidder hiện tại
+        var context = new BidPlacementContext(
+            user,
+            auction,
+            auctionBids,
+            previousUserBid,
+            holdAmount,
+            outbidUserId,
+            outbidHeldAmount);
+
+        try
+        {
+            return await PlaceBidWithTransactionAsync(userId, request, context);
+        }
+        catch (Exception ex) when (IsTransactionSupportException(ex))
+        {
+            _logger.LogWarning(ex, "MongoDB transactions are not supported. Falling back to sequential bid processing.");
+            return await PlaceBidWithoutTransactionAsync(userId, request, context);
+        }
+    }
+
+    private async Task<BidResult> PlaceBidWithTransactionAsync(string userId, CreateBidDto request, BidPlacementContext context)
+    {
+        using var session = await _mongoClient.StartSessionAsync();
+        session.StartTransaction();
+
+        try
+        {
+            var now = DateTime.UtcNow;
+
+            var bidderUpdateResult = await _users.UpdateOneAsync(
+                session,
+                Builders<User>.Filter.And(
+                    Builders<User>.Filter.Eq(u => u.Id, userId),
+                    Builders<User>.Filter.Gte(u => u.AvailableBalance, context.HoldAmount)),
+                Builders<User>.Update
+                    .Inc(u => u.AvailableBalance, -context.HoldAmount)
+                    .Inc(u => u.EscrowBalance, context.HoldAmount)
+                    .Set(u => u.UpdatedAt, now));
+
+            if (bidderUpdateResult.ModifiedCount == 0)
+            {
+                throw new InvalidOperationException("So du khong du de dat gia.");
+            }
+
+            var holdTransaction = BuildHoldTransaction(userId, request, context, now);
+            var createdBid = BuildBid(userId, request, context, now);
+
+            await _transactions.InsertOneAsync(session, holdTransaction);
+            await _bids.InsertOneAsync(session, createdBid);
+
+            var auctionUpdateResult = await _auctions.UpdateOneAsync(
+                session,
+                Builders<Auction>.Filter.And(
+                    Builders<Auction>.Filter.Eq(a => a.Id, request.AuctionId),
+                    Builders<Auction>.Filter.Eq(a => a.Status, AuctionStatus.Active),
+                    Builders<Auction>.Filter.Eq(a => a.CurrentPrice, context.Auction.CurrentPrice)),
+                Builders<Auction>.Update
+                    .Set(a => a.CurrentPrice, request.Amount)
+                    .Set(a => a.UpdatedAt, now)
+                    .Inc(a => a.BidCount, 1));
+
+            if (auctionUpdateResult.ModifiedCount == 0)
+            {
+                throw new InvalidOperationException("Gia hien tai da thay doi. Vui long tai lai va thu lai.");
+            }
+
+            if (!string.IsNullOrWhiteSpace(context.OutbidUserId) && context.OutbidHeldAmount > 0)
+            {
+                var outbidUser = await _users
+                    .Find(session, Builders<User>.Filter.Eq(u => u.Id, context.OutbidUserId))
+                    .FirstOrDefaultAsync();
+
+                if (outbidUser == null)
+                {
+                    throw new InvalidOperationException("Khong tim thay nguoi dung bi outbid.");
+                }
+
+                var outbidUpdateResult = await _users.UpdateOneAsync(
+                    session,
+                    Builders<User>.Filter.And(
+                        Builders<User>.Filter.Eq(u => u.Id, context.OutbidUserId),
+                        Builders<User>.Filter.Gte(u => u.EscrowBalance, context.OutbidHeldAmount)),
+                    Builders<User>.Update
+                        .Inc(u => u.AvailableBalance, context.OutbidHeldAmount)
+                        .Inc(u => u.EscrowBalance, -context.OutbidHeldAmount)
+                        .Set(u => u.UpdatedAt, now));
+
+                if (outbidUpdateResult.ModifiedCount == 0)
+                {
+                    throw new InvalidOperationException("Khong the giai phong hold cua nguoi bi outbid.");
+                }
+
+                await _transactions.InsertOneAsync(
+                    session,
+                    BuildReleaseTransaction(
+                        context.OutbidUserId,
+                        request.AuctionId,
+                        context.OutbidHeldAmount,
+                        outbidUser.AvailableBalance,
+                        outbidUser.AvailableBalance + context.OutbidHeldAmount,
+                        now));
+
+                await _bids.UpdateManyAsync(
+                    session,
+                    Builders<Bid>.Filter.And(
+                        Builders<Bid>.Filter.Eq(b => b.AuctionId, request.AuctionId),
+                        Builders<Bid>.Filter.Eq(b => b.UserId, context.OutbidUserId),
+                        Builders<Bid>.Filter.Eq(b => b.IsHoldReleased, false)),
+                    Builders<Bid>.Update.Set(b => b.IsHoldReleased, true));
+            }
+
+            await session.CommitTransactionAsync();
+
+            _logger.LogInformation(
+                "Bid placed transactionally: User {UserId} bid {Amount} on auction {AuctionId}. Held {HeldAmount}",
+                userId, request.Amount, request.AuctionId, context.HoldAmount);
+
+            return new BidResult
+            {
+                Success = true,
+                Bid = createdBid,
+                OutbidUserId = context.OutbidUserId
+            };
+        }
+        catch
+        {
+            await session.AbortTransactionAsync();
+            throw;
+        }
+    }
+
+    private async Task<BidResult> PlaceBidWithoutTransactionAsync(string userId, CreateBidDto request, BidPlacementContext context)
+    {
+        var user = context.User;
+        var auction = context.Auction;
+
         var balanceBefore = user.AvailableBalance;
-        user.AvailableBalance -= holdAmount;
-        user.EscrowBalance += holdAmount;
+        user.AvailableBalance -= context.HoldAmount;
+        user.EscrowBalance += context.HoldAmount;
         user.UpdatedAt = DateTime.UtcNow;
         await _userRepository.UpdateAsync(user);
 
-        // 2. Tạo transaction hold
-        var holdTransaction = new Transaction
+        await _transactionRepository.CreateAsync(new Transaction
         {
             UserId = userId,
             Type = TransactionType.Hold,
-            Amount = -holdAmount, // Âm vì trừ từ available
-            Description = $"Đặt giá {request.Amount:N0}đ cho phiên #{auction.Id?[..8]}",
+            Amount = -context.HoldAmount,
+            Description = $"Dat gia {request.Amount:N0}d cho phien #{auction.Id?[..8]}",
             RelatedAuctionId = request.AuctionId,
             BalanceBefore = balanceBefore,
             BalanceAfter = user.AvailableBalance,
-            CreatedAt = DateTime.UtcNow
-        };
-        await _transactionRepository.CreateAsync(holdTransaction);
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        });
 
-        // 3. Tạo bid mới
-        var bid = new Bid
-        {
-            AuctionId = request.AuctionId,
-            UserId = userId,
-            Amount = request.Amount,
-            HeldAmount = previousUserBid != null ? previousUserBid.HeldAmount + holdAmount : holdAmount,
-            IsHoldReleased = false,
-            AutoBid = request.AutoBid != null ? new Bid.AutoBidSettings
-            {
-                MaxBid = request.AutoBid.MaxBid,
-                IsActive = request.AutoBid.IsActive
-            } : null
-        };
+        var createdBid = await _bidRepository.CreateAsync(
+            BuildBid(userId, request, context, DateTime.UtcNow),
+            auction.CurrentPrice,
+            auction.BidIncrement);
 
-        var created = await _bidRepository.CreateAsync(bid, auction.CurrentPrice, auction.BidIncrement);
-
-        // 4. Update auction current price
         await _auctionRepository.UpdateCurrentPriceAsync(request.AuctionId, request.Amount);
 
-        // 5. Release hold của previous highest bidder (nếu có)
-        if (previousHighestBid != null && outbidUserId != null)
+        if (!string.IsNullOrWhiteSpace(context.OutbidUserId))
         {
-            await ReleaseHoldAsync(outbidUserId, request.AuctionId);
+            await ReleaseHoldAsync(context.OutbidUserId, request.AuctionId);
         }
 
         _logger.LogInformation(
-            "Bid placed: User {UserId} bid {Amount} on auction {AuctionId}. Held: {HeldAmount}",
-            userId, request.Amount, request.AuctionId, holdAmount);
+            "Bid placed sequentially: User {UserId} bid {Amount} on auction {AuctionId}. Held {HeldAmount}",
+            userId, request.Amount, request.AuctionId, context.HoldAmount);
 
         return new BidResult
         {
             Success = true,
-            Bid = created,
-            OutbidUserId = outbidUserId
+            Bid = createdBid,
+            OutbidUserId = context.OutbidUserId
         };
+    }
+
+    private static Bid BuildBid(string userId, CreateBidDto request, BidPlacementContext context, DateTime timestamp)
+    {
+        return new Bid
+        {
+            AuctionId = request.AuctionId,
+            UserId = userId,
+            Amount = request.Amount,
+            HeldAmount = context.PreviousUserBid != null
+                ? context.PreviousUserBid.HeldAmount + context.HoldAmount
+                : context.HoldAmount,
+            IsHoldReleased = false,
+            Timestamp = timestamp,
+            CreatedAt = timestamp,
+            AutoBid = request.AutoBid != null
+                ? new Bid.AutoBidSettings
+                {
+                    MaxBid = request.AutoBid.MaxBid,
+                    IsActive = request.AutoBid.IsActive
+                }
+                : null
+        };
+    }
+
+    private static Transaction BuildHoldTransaction(string userId, CreateBidDto request, BidPlacementContext context, DateTime createdAt)
+    {
+        return new Transaction
+        {
+            UserId = userId,
+            Type = TransactionType.Hold,
+            Amount = -context.HoldAmount,
+            Description = $"Dat gia {request.Amount:N0}d cho phien #{context.Auction.Id?[..8]}",
+            RelatedAuctionId = request.AuctionId,
+            BalanceBefore = context.User.AvailableBalance,
+            BalanceAfter = context.User.AvailableBalance - context.HoldAmount,
+            CreatedAt = createdAt,
+            UpdatedAt = createdAt
+        };
+    }
+
+    private static Transaction BuildReleaseTransaction(
+        string userId,
+        string auctionId,
+        decimal amount,
+        decimal balanceBefore,
+        decimal balanceAfter,
+        DateTime createdAt)
+    {
+        return new Transaction
+        {
+            UserId = userId,
+            Type = TransactionType.Release,
+            Amount = amount,
+            Description = "Hoan tra coc - bi outbid",
+            RelatedAuctionId = auctionId,
+            BalanceBefore = balanceBefore,
+            BalanceAfter = balanceAfter,
+            CreatedAt = createdAt,
+            UpdatedAt = createdAt
+        };
+    }
+
+    private static bool IsTransactionSupportException(Exception ex)
+    {
+        var message = ex.ToString();
+        return message.Contains("Transaction numbers are only allowed", StringComparison.OrdinalIgnoreCase)
+            || message.Contains("replica set member or mongos", StringComparison.OrdinalIgnoreCase)
+            || message.Contains("do not support transactions", StringComparison.OrdinalIgnoreCase)
+            || message.Contains("transactions are not supported", StringComparison.OrdinalIgnoreCase);
     }
 
     public async Task ReleaseHoldAsync(string userId, string auctionId)
     {
         var user = await _userRepository.GetByIdAsync(userId);
-        if (user == null) return;
+        if (user == null)
+        {
+            return;
+        }
 
-        // Tìm tất cả bids của user trong auction này chưa release
         var userBids = await _bidRepository.GetByAuctionIdAsync(auctionId);
         var unreleased = userBids
             .Where(b => b.UserId == userId && !b.IsHoldReleased)
             .ToList();
 
-        if (!unreleased.Any()) return;
+        if (!unreleased.Any())
+        {
+            return;
+        }
 
-        // Tính tổng held amount
         var totalHeld = unreleased.Max(b => b.HeldAmount);
-
-        // Release hold
         var balanceBefore = user.AvailableBalance;
+
         user.AvailableBalance += totalHeld;
         user.EscrowBalance -= totalHeld;
         user.UpdatedAt = DateTime.UtcNow;
         await _userRepository.UpdateAsync(user);
 
-        // Tạo transaction release
         var releaseTransaction = new Transaction
         {
             UserId = userId,
             Type = TransactionType.Release,
             Amount = totalHeld,
-            Description = $"Hoàn trả cọc - bị outbid",
+            Description = "Hoan tra coc - bi outbid",
             RelatedAuctionId = auctionId,
             BalanceBefore = balanceBefore,
             BalanceAfter = user.AvailableBalance,
@@ -240,7 +435,6 @@ public class BidService : IBidService
         };
         await _transactionRepository.CreateAsync(releaseTransaction);
 
-        // Mark bids as released
         foreach (var bid in unreleased)
         {
             bid.IsHoldReleased = true;
@@ -248,7 +442,7 @@ public class BidService : IBidService
         }
 
         _logger.LogInformation(
-            "Released hold for user {UserId} on auction {AuctionId}. Amount: {Amount}",
+            "Released hold for user {UserId} on auction {AuctionId}. Amount {Amount}",
             userId, auctionId, totalHeld);
     }
 
@@ -275,36 +469,38 @@ public class BidService : IBidService
     {
         var winner = await _userRepository.GetByIdAsync(winnerId);
         var seller = await _userRepository.GetByIdAsync(sellerId);
-        if (winner == null || seller == null) return;
+        if (winner == null || seller == null)
+        {
+            return;
+        }
 
-        // Tìm winning bid
         var bids = await _bidRepository.GetByAuctionIdAsync(auctionId);
         var winningBid = bids
             .Where(b => b.UserId == winnerId && !b.IsHoldReleased)
             .OrderByDescending(b => b.Amount)
             .FirstOrDefault();
 
-        if (winningBid == null) return;
+        if (winningBid == null)
+        {
+            return;
+        }
 
         var paymentAmount = winningBid.HeldAmount;
 
-        // 1. Trừ từ escrow của winner
         winner.EscrowBalance -= paymentAmount;
         winner.UpdatedAt = DateTime.UtcNow;
         await _userRepository.UpdateAsync(winner);
 
-        // 2. Cộng vào available của seller
         seller.AvailableBalance += paymentAmount;
         seller.UpdatedAt = DateTime.UtcNow;
         await _userRepository.UpdateAsync(seller);
 
-        // 3. Tạo transactions
         var buyerTransaction = new Transaction
         {
             UserId = winnerId,
             Type = TransactionType.Payment,
             Amount = -paymentAmount,
-            Description = $"Thanh toán thắng đấu giá",
+            Description = "Thanh toan thang dau gia",
             RelatedAuctionId = auctionId,
             RelatedBidId = winningBid.Id,
             BalanceBefore = winner.EscrowBalance + paymentAmount,
@@ -318,7 +514,7 @@ public class BidService : IBidService
             UserId = sellerId,
             Type = TransactionType.Payment,
             Amount = paymentAmount,
-            Description = $"Nhận thanh toán từ đấu giá",
+            Description = "Nhan thanh toan tu dau gia",
             RelatedAuctionId = auctionId,
             RelatedBidId = winningBid.Id,
             BalanceBefore = seller.AvailableBalance - paymentAmount,
@@ -327,7 +523,6 @@ public class BidService : IBidService
         };
         await _transactionRepository.CreateAsync(sellerTransaction);
 
-        // 4. Mark bid as released
         winningBid.IsHoldReleased = true;
         winningBid.IsWinningBid = true;
         await _bidRepository.UpdateAsync(winningBid);
@@ -359,7 +554,10 @@ public class BidService : IBidService
     public async Task<bool> EnsureHoldAsync(string userId, string auctionId, decimal amount)
     {
         var user = await _userRepository.GetByIdAsync(userId);
-        if (user == null) return false;
+        if (user == null)
+        {
+            return false;
+        }
 
         var userBids = await _bidRepository.GetByAuctionIdAsync(auctionId);
         var activeBid = userBids
@@ -369,38 +567,33 @@ public class BidService : IBidService
 
         if (activeBid != null && activeBid.HeldAmount >= amount)
         {
-            return true; // Đã có hold đủ
+            return true;
         }
 
-        // Cần hold thêm
         var neededAmount = activeBid != null ? amount - activeBid.HeldAmount : amount;
-
         if (user.AvailableBalance < neededAmount)
         {
-            return false; // Không đủ tiền
+            return false;
         }
 
-        // Hold thêm amount
         var balanceBefore = user.AvailableBalance;
         user.AvailableBalance -= neededAmount;
         user.EscrowBalance += neededAmount;
         user.UpdatedAt = DateTime.UtcNow;
         await _userRepository.UpdateAsync(user);
 
-        // Update bid held amount
         if (activeBid != null)
         {
             activeBid.HeldAmount = amount;
             await _bidRepository.UpdateAsync(activeBid);
         }
 
-        // Tạo transaction
         var holdTransaction = new Transaction
         {
             UserId = userId,
             Type = TransactionType.Hold,
             Amount = -neededAmount,
-            Description = $"Đảm bảo hold {amount:N0}đ cho phiên #{auctionId[..8]}",
+            Description = $"Dam bao hold {amount:N0}d cho phien #{auctionId[..8]}",
             RelatedAuctionId = auctionId,
             BalanceBefore = balanceBefore,
             BalanceAfter = user.AvailableBalance,
@@ -409,7 +602,7 @@ public class BidService : IBidService
         await _transactionRepository.CreateAsync(holdTransaction);
 
         _logger.LogInformation(
-            "Ensured hold for user {UserId} on auction {AuctionId}. Amount: {Amount}",
+            "Ensured hold for user {UserId} on auction {AuctionId}. Amount {Amount}",
             userId, auctionId, amount);
 
         return true;
@@ -423,17 +616,16 @@ public class BidService : IBidService
             return false;
         }
 
-        // Validate user role
         if (isBuyer && auction.WinnerId != userId)
         {
-            return false; // Không phải buyer
-        }
-        if (!isBuyer && auction.SellerId != userId)
-        {
-            return false; // Không phải seller
+            return false;
         }
 
-        // Tìm transaction pending của auction này (transaction của buyer/winner)
+        if (!isBuyer && auction.SellerId != userId)
+        {
+            return false;
+        }
+
         var transactions = await _transactionRepository.GetByAuctionIdAsync(auctionId);
         var pendingTransaction = transactions
             .Where(t => t.Type == TransactionType.Payment && t.Status == TransactionStatus.Pending && t.UserId == auction.WinnerId)
@@ -441,24 +633,29 @@ public class BidService : IBidService
 
         if (pendingTransaction == null)
         {
-            // Tạo transaction mới nếu chưa có
             var bids = await _bidRepository.GetByAuctionIdAsync(auctionId);
             var winningBid = bids
                 .Where(b => b.UserId == auction.WinnerId && !b.IsHoldReleased)
                 .OrderByDescending(b => b.Amount)
                 .FirstOrDefault();
 
-            if (winningBid == null) return false;
+            if (winningBid == null)
+            {
+                return false;
+            }
 
             var winner = await _userRepository.GetByIdAsync(auction.WinnerId!);
-            if (winner == null) return false;
+            if (winner == null)
+            {
+                return false;
+            }
 
             pendingTransaction = new Transaction
             {
                 UserId = auction.WinnerId!,
                 Type = TransactionType.Payment,
                 Amount = -winningBid.HeldAmount,
-                Description = $"Thanh toán đấu giá - chờ xác nhận",
+                Description = "Thanh toan dau gia - cho xac nhan",
                 RelatedAuctionId = auctionId,
                 RelatedBidId = winningBid.Id,
                 Status = TransactionStatus.Pending,
@@ -471,7 +668,6 @@ public class BidService : IBidService
             await _transactionRepository.CreateAsync(pendingTransaction);
         }
 
-        // Update confirm status
         if (isBuyer)
         {
             pendingTransaction.BuyerConfirmed = true;
@@ -483,22 +679,18 @@ public class BidService : IBidService
 
         await _transactionRepository.UpdateAsync(pendingTransaction);
 
-        // Nếu cả 2 đã confirm, chuyển tiền
         if (pendingTransaction.BuyerConfirmed && pendingTransaction.SellerConfirmed)
         {
             await ProcessWinnerPaymentAsync(auctionId, auction.WinnerId!, auction.SellerId);
-            
-            // Update transaction status
+
             pendingTransaction.Status = TransactionStatus.Completed;
             await _transactionRepository.UpdateAsync(pendingTransaction);
 
-            // Send Transaction Completed emails to both parties
             var buyer = await _userRepository.GetByIdAsync(auction.WinnerId!);
             var seller = await _userRepository.GetByIdAsync(auction.SellerId);
             var transactionDate = DateTime.UtcNow.ToString("dd/MM/yyyy HH:mm");
             var finalAmount = FormatCurrency(Math.Abs(pendingTransaction.Amount));
 
-            // Email to buyer
             if (buyer != null && !string.IsNullOrEmpty(buyer.Email))
             {
                 try
@@ -506,11 +698,11 @@ public class BidService : IBidService
                     await _emailService.SendTransactionCompletedEmailAsync(
                         buyer.Email,
                         buyer.FullName,
-                        "Người mua",
+                        "Nguoi mua",
                         auction.Title,
                         finalAmount,
                         transactionDate);
-                    
+
                     _logger.LogInformation("Sent transaction completed email to buyer {Email}", buyer.Email);
                 }
                 catch (Exception emailEx)
@@ -519,7 +711,6 @@ public class BidService : IBidService
                 }
             }
 
-            // Email to seller
             if (seller != null && !string.IsNullOrEmpty(seller.Email))
             {
                 try
@@ -527,11 +718,11 @@ public class BidService : IBidService
                     await _emailService.SendTransactionCompletedEmailAsync(
                         seller.Email,
                         seller.FullName,
-                        "Người bán",
+                        "Nguoi ban",
                         auction.Title,
                         finalAmount,
                         transactionDate);
-                    
+
                     _logger.LogInformation("Sent transaction completed email to seller {Email}", seller.Email);
                 }
                 catch (Exception emailEx)
@@ -540,9 +731,7 @@ public class BidService : IBidService
                 }
             }
 
-            _logger.LogInformation(
-                "Transaction confirmed and completed for auction {AuctionId}",
-                auctionId);
+            _logger.LogInformation("Transaction confirmed and completed for auction {AuctionId}", auctionId);
         }
 
         return true;
@@ -550,7 +739,7 @@ public class BidService : IBidService
 
     private static string FormatCurrency(decimal amount)
     {
-        return string.Format(new System.Globalization.CultureInfo("vi-VN"), "{0:N0} ₫", amount);
+        return string.Format(new System.Globalization.CultureInfo("vi-VN"), "{0:N0} VND", amount);
     }
 
     public async Task<bool> CancelTransactionAsync(string auctionId, string userId)
@@ -561,13 +750,11 @@ public class BidService : IBidService
             return false;
         }
 
-        // Chỉ buyer hoặc seller mới được cancel
         if (auction.WinnerId != userId && auction.SellerId != userId)
         {
             return false;
         }
 
-        // Tìm transaction pending
         var transactions = await _transactionRepository.GetByAuctionIdAsync(auctionId);
         var pendingTransaction = transactions
             .Where(t => t.Type == TransactionType.Payment && t.Status == TransactionStatus.Pending)
@@ -575,10 +762,9 @@ public class BidService : IBidService
 
         if (pendingTransaction == null)
         {
-            return false; // Không có transaction pending
+            return false;
         }
 
-        // Lấy winning bid để biết số tiền cần refund
         var bids = await _bidRepository.GetByAuctionIdAsync(auctionId);
         var winningBid = bids
             .Where(b => b.UserId == auction.WinnerId && !b.IsHoldReleased)
@@ -587,32 +773,33 @@ public class BidService : IBidService
 
         if (winningBid == null)
         {
-            return false; // Không tìm thấy winning bid
+            return false;
         }
 
-        // Lấy balance trước khi release
         var winner = await _userRepository.GetByIdAsync(auction.WinnerId!);
-        if (winner == null) return false;
-        var balanceBeforeRefund = winner.AvailableBalance;
+        if (winner == null)
+        {
+            return false;
+        }
 
-        // Release hold của winner (sẽ tự động tạo transaction Release)
+        var balanceBeforeRefund = winner.AvailableBalance;
         await ReleaseHoldAsync(auction.WinnerId!, auctionId);
 
-        // Lấy balance sau khi release
         var winnerAfter = await _userRepository.GetByIdAsync(auction.WinnerId!);
-        if (winnerAfter == null) return false;
+        if (winnerAfter == null)
+        {
+            return false;
+        }
 
-        // Update transaction status
         pendingTransaction.Status = TransactionStatus.Cancelled;
         await _transactionRepository.UpdateAsync(pendingTransaction);
 
-        // Tạo refund transaction để tracking
         var refundTransaction = new Transaction
         {
             UserId = auction.WinnerId!,
             Type = TransactionType.Refund,
             Amount = winningBid.HeldAmount,
-            Description = $"Hoàn tiền - hủy giao dịch",
+            Description = "Hoan tien - huy giao dich",
             RelatedAuctionId = auctionId,
             RelatedBidId = winningBid.Id,
             Status = TransactionStatus.Completed,
@@ -628,4 +815,13 @@ public class BidService : IBidService
 
         return true;
     }
+
+    private sealed record BidPlacementContext(
+        User User,
+        Auction Auction,
+        List<Bid> AuctionBids,
+        Bid? PreviousUserBid,
+        decimal HoldAmount,
+        string? OutbidUserId,
+        decimal OutbidHeldAmount);
 }

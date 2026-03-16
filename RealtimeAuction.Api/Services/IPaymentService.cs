@@ -17,7 +17,7 @@ public interface IPaymentService
     /// <summary>
     /// Lấy thông tin deposit theo orderCode
     /// </summary>
-    Task<DepositResponse?> GetDepositStatusAsync(long orderCode);
+    Task<DepositResponse?> GetDepositStatusAsync(string userId, long orderCode);
     
     /// <summary>
     /// Verify signature từ PayOS

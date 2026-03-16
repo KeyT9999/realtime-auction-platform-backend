@@ -1,6 +1,5 @@
 using MongoDB.Driver;
 using RealtimeAuction.Api.Models;
-using RealtimeAuction.Api.Settings;
 
 namespace RealtimeAuction.Api.Repositories;
 
@@ -8,11 +7,9 @@ public class NotificationRepository : INotificationRepository
 {
     private readonly IMongoCollection<Notification> _collection;
 
-    public NotificationRepository(MongoDbSettings settings)
+    public NotificationRepository(IMongoDatabase database)
     {
-        var client = new MongoClient(settings.ConnectionString);
-        var db = client.GetDatabase(settings.DatabaseName);
-        _collection = db.GetCollection<Notification>("Notifications");
+        _collection = database.GetCollection<Notification>("Notifications");
     }
 
     public async Task<Notification> CreateAsync(Notification notification)

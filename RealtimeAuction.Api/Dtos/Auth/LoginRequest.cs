@@ -10,5 +10,8 @@ namespace RealtimeAuction.Api.Dtos.Auth
 
         [Required]
         public string Password { get; set; } = null!;
+
+        [Required]
+        public string CaptchaToken { get; set; } = null!;
     }
 }

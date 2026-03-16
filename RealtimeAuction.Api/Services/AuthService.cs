@@ -610,7 +610,7 @@ namespace RealtimeAuction.Api.Services
                 FullName = user.FullName,
                 Role = user.Role!,
                 AccessToken = accessToken,
-                RefreshToken = refreshToken.Token
+                RefreshToken = refreshToken.PlainTextToken
             };
         }
     }

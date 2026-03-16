@@ -115,6 +115,18 @@ var frontendUrl = Environment.GetEnvironmentVariable("FRONTEND_URL")
     ?? "http://localhost:5173";
 builder.Configuration["FrontendUrl"] = frontendUrl;
 
+static bool ParseBoolean(string? value, bool defaultValue)
+{
+    if (string.IsNullOrWhiteSpace(value))
+    {
+        return defaultValue;
+    }
+
+    return string.Equals(value, "true", StringComparison.OrdinalIgnoreCase) ||
+           string.Equals(value, "1", StringComparison.OrdinalIgnoreCase) ||
+           string.Equals(value, "yes", StringComparison.OrdinalIgnoreCase);
+}
+
 // Configure PayOS Settings
 var payOsSettings = new PayOsSettings
 {
@@ -176,6 +188,53 @@ var cloudinarySettings = new CloudinarySettings
         ?? string.Empty,
     ApiSecret = Environment.GetEnvironmentVariable("CLOUDINARY_API_SECRET") 
         ?? builder.Configuration["Cloudinary:ApiSecret"] 
+        ?? string.Empty
+};
+
+var captchaSettings = new CaptchaSettings
+{
+    Enabled = ParseBoolean(Environment.GetEnvironmentVariable("CAPTCHA_ENABLED")
+        ?? builder.Configuration["Captcha:Enabled"], true),
+    SecretKey = Environment.GetEnvironmentVariable("RECAPTCHA_SECRET_KEY")
+        ?? builder.Configuration["Captcha:SecretKey"]
+        ?? string.Empty,
+    MinimumScore = double.TryParse(
+        Environment.GetEnvironmentVariable("RECAPTCHA_MINIMUM_SCORE")
+        ?? builder.Configuration["Captcha:MinimumScore"],
+        out var captchaMinimumScore) ? captchaMinimumScore : 0.5d,
+    VerifyUrl = Environment.GetEnvironmentVariable("RECAPTCHA_VERIFY_URL")
+        ?? builder.Configuration["Captcha:VerifyUrl"]
+        ?? "https://www.google.com/recaptcha/api/siteverify",
+    TimeoutSeconds = int.TryParse(
+        Environment.GetEnvironmentVariable("RECAPTCHA_TIMEOUT_SECONDS")
+        ?? builder.Configuration["Captcha:TimeoutSeconds"],
+        out var captchaTimeout) ? captchaTimeout : 10
+};
+
+var geminiSettings = new GeminiSettings
+{
+    ApiKey = Environment.GetEnvironmentVariable("GEMINI_API_KEY")
+        ?? builder.Configuration["Gemini:ApiKey"]
+        ?? string.Empty,
+    Model = Environment.GetEnvironmentVariable("GEMINI_MODEL")
+        ?? builder.Configuration["Gemini:Model"]
+        ?? "gemini-2.5-flash",
+    TimeoutSeconds = int.TryParse(
+        Environment.GetEnvironmentVariable("GEMINI_TIMEOUT_SECONDS")
+        ?? builder.Configuration["Gemini:TimeoutSeconds"],
+        out var geminiTimeout) ? geminiTimeout : 60
+};
+
+var firebaseAuthSettings = new FirebaseAuthSettings
+{
+    ProjectId = Environment.GetEnvironmentVariable("FIREBASE_PROJECT_ID")
+        ?? builder.Configuration["Firebase:ProjectId"]
+        ?? string.Empty,
+    ClientEmail = Environment.GetEnvironmentVariable("FIREBASE_CLIENT_EMAIL")
+        ?? builder.Configuration["Firebase:ClientEmail"]
+        ?? string.Empty,
+    PrivateKey = Environment.GetEnvironmentVariable("FIREBASE_PRIVATE_KEY")
+        ?? builder.Configuration["Firebase:PrivateKey"]
         ?? string.Empty
 };
 
@@ -281,6 +340,26 @@ builder.Services.Configure<EmailSettings>(options =>
     options.FromName = emailSettings.FromName;
     options.ReplyTo = emailSettings.ReplyTo;
 });
+builder.Services.Configure<CaptchaSettings>(options =>
+{
+    options.Enabled = captchaSettings.Enabled;
+    options.SecretKey = captchaSettings.SecretKey;
+    options.MinimumScore = captchaSettings.MinimumScore;
+    options.VerifyUrl = captchaSettings.VerifyUrl;
+    options.TimeoutSeconds = captchaSettings.TimeoutSeconds;
+});
+builder.Services.Configure<GeminiSettings>(options =>
+{
+    options.ApiKey = geminiSettings.ApiKey;
+    options.Model = geminiSettings.Model;
+    options.TimeoutSeconds = geminiSettings.TimeoutSeconds;
+});
+builder.Services.Configure<FirebaseAuthSettings>(options =>
+{
+    options.ProjectId = firebaseAuthSettings.ProjectId;
+    options.ClientEmail = firebaseAuthSettings.ClientEmail;
+    options.PrivateKey = firebaseAuthSettings.PrivateKey;
+});
 
 // Notifications: Realtime = SignalR; offline = email when SendEmailWhenOffline is true
 var sendEmailWhenOffline = Environment.GetEnvironmentVariable("NOTIFICATIONS_SEND_EMAIL_WHEN_OFFLINE");
@@ -292,10 +371,15 @@ builder.Services.Configure<NotificationSettings>(options =>
 });
 
 // Register MongoDB Database
+builder.Services.AddSingleton<IMongoClient>(serviceProvider =>
+{
+    var settings = serviceProvider.GetRequiredService<MongoDbSettings>();
+    return new MongoClient(settings.ConnectionString);
+});
 builder.Services.AddSingleton<IMongoDatabase>(serviceProvider =>
 {
     var settings = serviceProvider.GetRequiredService<MongoDbSettings>();
-    var client = new MongoClient(settings.ConnectionString);
+    var client = serviceProvider.GetRequiredService<IMongoClient>();
     return client.GetDatabase(settings.DatabaseName);
 });
 
@@ -321,6 +405,9 @@ builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IAdminService, AdminService>();
 builder.Services.AddScoped<IEmailService, EmailService>();
 builder.Services.AddScoped<ITokenService, TokenService>();
+builder.Services.AddScoped<ICaptchaVerificationService, CaptchaVerificationService>();
+builder.Services.AddScoped<IGeminiService, GeminiService>();
+builder.Services.AddScoped<IFirebaseTokenService, FirebaseTokenService>();
 builder.Services.AddScoped<IImageUploadService, ImageUploadService>();
 builder.Services.AddScoped<IProvinceService, ProvinceService>();
 builder.Services.AddScoped<IPaymentService, PaymentService>();
@@ -340,6 +427,14 @@ builder.Services.Configure<PayOsSettings>(options =>
     options.CancelUrl = payOsSettings.CancelUrl;
 });
 builder.Services.AddHttpClient("PayOS");
+builder.Services.AddHttpClient("Captcha", client =>
+{
+    client.Timeout = TimeSpan.FromSeconds(captchaSettings.TimeoutSeconds);
+});
+builder.Services.AddHttpClient("Gemini", client =>
+{
+    client.Timeout = TimeSpan.FromSeconds(geminiSettings.TimeoutSeconds);
+});
 
 // Configure JWT Authentication
 builder.Services.AddAuthentication(options =>

@@ -40,9 +40,10 @@ public class AdminService : IAdminService
         // Search filter
         if (!string.IsNullOrWhiteSpace(search))
         {
+            var escapedSearch = MongoRegexHelper.EscapeLiteralPattern(search);
             var searchFilter = filterBuilder.Or(
-                filterBuilder.Regex(u => u.Email, new MongoDB.Bson.BsonRegularExpression(search, "i")),
-                filterBuilder.Regex(u => u.FullName, new MongoDB.Bson.BsonRegularExpression(search, "i"))
+                filterBuilder.Regex(u => u.Email, new MongoDB.Bson.BsonRegularExpression(escapedSearch, "i")),
+                filterBuilder.Regex(u => u.FullName, new MongoDB.Bson.BsonRegularExpression(escapedSearch, "i"))
             );
             filters.Add(searchFilter);
         }

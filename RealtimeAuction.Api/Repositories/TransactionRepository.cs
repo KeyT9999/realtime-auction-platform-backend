@@ -1,7 +1,6 @@
 using MongoDB.Driver;
 using RealtimeAuction.Api.Models;
 using RealtimeAuction.Api.Models.Enums;
-using RealtimeAuction.Api.Settings;
 
 namespace RealtimeAuction.Api.Repositories;
 
@@ -9,10 +8,8 @@ public class TransactionRepository : ITransactionRepository
 {
     private readonly IMongoCollection<Transaction> _transactions;
 
-    public TransactionRepository(MongoDbSettings mongoDbSettings)
+    public TransactionRepository(IMongoDatabase database)
     {
-        var client = new MongoClient(mongoDbSettings.ConnectionString);
-        var database = client.GetDatabase(mongoDbSettings.DatabaseName);
         _transactions = database.GetCollection<Transaction>("Transactions");
     }
 
@@ -72,5 +69,46 @@ public class TransactionRepository : ITransactionRepository
             .Find(t => t.RelatedAuctionId == auctionId)
             .SortByDescending(t => t.CreatedAt)
             .ToListAsync();
+    }
+
+    public async Task<(List<Transaction> Items, int TotalCount)> GetPagedByUserIdAsync(
+        string userId,
+        int page,
+        int limit,
+        TransactionType? type = null,
+        DateTime? dateFrom = null,
+        DateTime? dateTo = null)
+    {
+        var filterBuilder = Builders<Transaction>.Filter;
+        var filters = new List<FilterDefinition<Transaction>>
+        {
+            filterBuilder.Eq(t => t.UserId, userId)
+        };
+
+        if (type.HasValue)
+        {
+            filters.Add(filterBuilder.Eq(t => t.Type, type.Value));
+        }
+
+        if (dateFrom.HasValue)
+        {
+            filters.Add(filterBuilder.Gte(t => t.CreatedAt, dateFrom.Value));
+        }
+
+        if (dateTo.HasValue)
+        {
+            filters.Add(filterBuilder.Lt(t => t.CreatedAt, dateTo.Value));
+        }
+
+        var filter = filters.Count == 1 ? filters[0] : filterBuilder.And(filters);
+        var totalCount = (int)await _transactions.CountDocumentsAsync(filter);
+        var items = await _transactions
+            .Find(filter)
+            .SortByDescending(t => t.CreatedAt)
+            .Skip((page - 1) * limit)
+            .Limit(limit)
+            .ToListAsync();
+
+        return (items, totalCount);
     }
 }
