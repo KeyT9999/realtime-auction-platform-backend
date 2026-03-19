@@ -43,4 +43,32 @@ public class ProductRepository : IProductRepository
         return await _products.Find(_ => true).ToListAsync();
     }
 
+    public async Task<List<string>> SearchProductIdsAsync(string keyword)
+    {
+        if (string.IsNullOrWhiteSpace(keyword)) return new List<string>();
+
+        var keywords = RealtimeAuction.Api.Helpers.SearchHelper.GetExpandedKeywords(keyword);
+        var filterBuilder = Builders<Product>.Filter;
+        var orFilters = new List<FilterDefinition<Product>>();
+
+        foreach (var k in keywords)
+        {
+            var escapedKeyword = RealtimeAuction.Api.Helpers.MongoRegexHelper.EscapeLiteralPattern(k);
+            if (string.IsNullOrEmpty(escapedKeyword)) continue;
+
+            var regex = new MongoDB.Bson.BsonRegularExpression(escapedKeyword, "i");
+            orFilters.Add(filterBuilder.Or(
+                filterBuilder.Regex(p => p.Name, regex),
+                filterBuilder.Regex(p => p.Description, regex),
+                filterBuilder.Regex(p => p.Brand, regex),
+                filterBuilder.Regex(p => p.Model, regex),
+                filterBuilder.Regex(p => p.Category, regex)
+            ));
+        }
+
+        if (orFilters.Count == 0) return new List<string>();
+
+        var products = await _products.Find(filterBuilder.Or(orFilters)).Project(p => p.Id).ToListAsync();
+        return products.Where(id => id != null).ToList()!;
+    }
 }

@@ -18,6 +18,7 @@ public interface IAuctionRepository
     Task<bool> ValidateStatusTransitionAsync(AuctionStatus currentStatus, AuctionStatus newStatus);
     Task<(List<Auction> items, int totalCount)> SearchAuctionsAsync(
         string? keyword,
+        List<string>? productIds,
         AuctionStatus? status,
         string? categoryId,
         string? sellerId,
@@ -27,6 +28,7 @@ public interface IAuctionRepository
         string sortBy,
         string sortOrder,
         int page,
-        int pageSize);
+        int pageSize,
+        List<string>? additionalCategoryIds = null);
     Task<List<Auction>> GetSimilarAuctionsAsync(string auctionId, string categoryId, decimal currentPrice, int limit = 8);
 }

@@ -81,9 +81,30 @@ public class AuctionController : ControllerBase
     {
         try
         {
+            List<string>? productIds = null;
+            List<string>? additionalCategoryIds = null;
+
+            if (!string.IsNullOrEmpty(keyword))
+            {
+                // 1. Search matching products
+                productIds = await _productRepository.SearchProductIdsAsync(keyword);
+
+                // 2. Search matching categories (keyword extension)
+                var keywords = RealtimeAuction.Api.Helpers.SearchHelper.GetExpandedKeywords(keyword);
+                var allCategories = await _categoryRepository.GetAllAsync();
+                additionalCategoryIds = allCategories
+                    .Where(c => keywords.Any(k => 
+                        (c.Name != null && c.Name.Contains(k, StringComparison.OrdinalIgnoreCase)) ||
+                        (c.Description != null && c.Description.Contains(k, StringComparison.OrdinalIgnoreCase))))
+                    .Select(c => c.Id!)
+                    .ToList();
+            }
+
+            // If we found relevant categories from the keyword, we want to include them in the search
+            // We pass categoryId (if any) and additionalCategoryIds to the repository
             var (items, totalCount) = await _auctionRepository.SearchAuctionsAsync(
-                keyword, status, categoryId, sellerId, minPrice, maxPrice,
-                timeFilter, sortBy, sortOrder, page, pageSize);
+                keyword, productIds, status, categoryId, sellerId, minPrice, maxPrice,
+                timeFilter, sortBy, sortOrder, page, pageSize, additionalCategoryIds);
 
             var response = await MapToResponseDtos(items);
             var totalPages = (int)Math.Ceiling((double)totalCount / pageSize);

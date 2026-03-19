@@ -110,6 +110,7 @@ public class AuctionRepository : IAuctionRepository
 
     public async Task<(List<Auction> items, int totalCount)> SearchAuctionsAsync(
         string? keyword,
+        List<string>? productIds,
         AuctionStatus? status,
         string? categoryId,
         string? sellerId,
@@ -119,20 +120,38 @@ public class AuctionRepository : IAuctionRepository
         string sortBy,
         string sortOrder,
         int page,
-        int pageSize)
+        int pageSize,
+        List<string>? additionalCategoryIds = null)
     {
         var filterBuilder = Builders<Auction>.Filter;
         var filters = new List<FilterDefinition<Auction>>();
 
-        // Keyword search (title or description)
+        // Keyword search (title or description or matching products)
         if (!string.IsNullOrEmpty(keyword))
         {
-            var escapedKeyword = MongoRegexHelper.EscapeLiteralPattern(keyword);
-            var keywordFilter = filterBuilder.Or(
-                filterBuilder.Regex(a => a.Title, new MongoDB.Bson.BsonRegularExpression(escapedKeyword, "i")),
-                filterBuilder.Regex(a => a.Description, new MongoDB.Bson.BsonRegularExpression(escapedKeyword, "i"))
-            );
-            filters.Add(keywordFilter);
+            var keywords = RealtimeAuction.Api.Helpers.SearchHelper.GetExpandedKeywords(keyword);
+            var orFilters = new List<FilterDefinition<Auction>>();
+
+            foreach (var k in keywords)
+            {
+                var escapedKeyword = MongoRegexHelper.EscapeLiteralPattern(k);
+                if (string.IsNullOrEmpty(escapedKeyword)) continue;
+
+                var regex = new MongoDB.Bson.BsonRegularExpression(escapedKeyword, "i");
+                orFilters.Add(filterBuilder.Regex(a => a.Title, regex));
+                orFilters.Add(filterBuilder.Regex(a => a.Description, regex));
+            }
+
+            if (productIds != null && productIds.Count > 0)
+            {
+                orFilters.Add(filterBuilder.In(a => a.ProductId, productIds));
+            }
+
+            if (orFilters.Count > 0)
+            {
+                var keywordFilter = filterBuilder.Or(orFilters);
+                filters.Add(keywordFilter);
+            }
         }
 
         // Status filter
@@ -142,9 +161,16 @@ public class AuctionRepository : IAuctionRepository
         }
 
         // Category filter
-        if (!string.IsNullOrEmpty(categoryId))
+        if (!string.IsNullOrEmpty(categoryId) || (additionalCategoryIds != null && additionalCategoryIds.Count > 0))
         {
-            filters.Add(filterBuilder.Eq(a => a.CategoryId, categoryId));
+            var categoryFilters = new List<string>();
+            if (!string.IsNullOrEmpty(categoryId)) categoryFilters.Add(categoryId);
+            if (additionalCategoryIds != null) categoryFilters.AddRange(additionalCategoryIds);
+
+            if (categoryFilters.Count > 0)
+            {
+                filters.Add(filterBuilder.In(a => a.CategoryId, categoryFilters.Distinct()));
+            }
         }
 
         // Seller filter
