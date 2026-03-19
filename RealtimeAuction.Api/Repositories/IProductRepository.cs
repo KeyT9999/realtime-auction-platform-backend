@@ -4,6 +4,7 @@ namespace RealtimeAuction.Api.Repositories;
 
 public interface IProductRepository
 {
+    Task<List<string>> SearchProductIdsAsync(string keyword);
     Task<Product?> GetByIdAsync(string id);
     Task<Product> CreateAsync(Product product);
     Task<Product> UpdateAsync(Product product);
