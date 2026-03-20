@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using RealtimeAuction.Api.Dtos.Dispute;
 using RealtimeAuction.Api.Models;
 using RealtimeAuction.Api.Models.Enums;
+using RealtimeAuction.Api.Observability;
 using RealtimeAuction.Api.Repositories;
 using RealtimeAuction.Api.Services;
 using System.Security.Claims;
@@ -20,6 +21,7 @@ public class DisputeController : ControllerBase
     private readonly INotificationRepository _notificationRepo;
     private readonly IEmailService _emailService;
     private readonly IEscrowService _escrowService;
+    private readonly ILogger<DisputeController> _logger;
 
     public DisputeController(
         IDisputeRepository disputeRepo,
@@ -27,7 +29,8 @@ public class DisputeController : ControllerBase
         IUserRepository userRepo,
         INotificationRepository notificationRepo,
         IEmailService emailService,
-        IEscrowService escrowService)
+        IEscrowService escrowService,
+        ILogger<DisputeController> logger)
     {
         _disputeRepo = disputeRepo;
         _orderRepo = orderRepo;
@@ -35,6 +38,7 @@ public class DisputeController : ControllerBase
         _notificationRepo = notificationRepo;
         _emailService = emailService;
         _escrowService = escrowService;
+        _logger = logger;
     }
 
     private string GetUserId() => User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "";
@@ -97,6 +101,20 @@ public class DisputeController : ControllerBase
         order.UpdatedAt = DateTime.UtcNow;
         await _orderRepo.UpdateAsync(order);
 
+        var createdAt = DateTime.UtcNow;
+        _logger.LogInformation(
+            "{EventName}: Dispute created. DisputeId {DisputeId}, OrderId {OrderId}, AuctionId {AuctionId}, OpenedBy {OpenedBy}, OpenedByUserId {OpenedByUserId}, Reason {Reason}, EvidenceImageCount {EvidenceImageCount}, ServerTimeUtc {ServerTimeUtc}, ServerTimeUtcMs {ServerTimeUtcMs}",
+            BusinessEvents.DisputeCreated,
+            dispute.Id,
+            dispute.OrderId,
+            dispute.AuctionId,
+            dispute.OpenedBy,
+            userId,
+            dispute.Reason,
+            dispute.EvidenceImages.Count,
+            createdAt,
+            AuditLog.ToUnixTimeMilliseconds(createdAt));
+
         // Notify the other party
         var otherUserId = isBuyer ? order.SellerId : order.BuyerId;
         var openerName = isBuyer ? buyer?.FullName : seller?.FullName;
@@ -121,7 +139,16 @@ public class DisputeController : ControllerBase
                     order.ProductTitle, openerName ?? "Người dùng",
                     GetReasonText(request.Reason));
             }
-            catch { /* Don't fail on email error */ }
+            catch (Exception ex)
+            {
+                _logger.LogError(
+                    ex,
+                    "{EventName}: Failed to send dispute opened email. DisputeId {DisputeId}, RecipientUserId {RecipientUserId}, RecipientEmail {RecipientEmail}",
+                    BusinessEvents.DisputeNotificationFailed,
+                    dispute.Id,
+                    otherUser.Id,
+                    otherUser.Email);
+            }
         }
 
         return Ok(MapToDto(dispute));
@@ -221,6 +248,20 @@ public class DisputeController : ControllerBase
 
         await _disputeRepo.AddMessageAsync(id, message);
 
+        var messageCreatedAt = DateTime.UtcNow;
+        _logger.LogInformation(
+            "{EventName}: Dispute message added. DisputeId {DisputeId}, OrderId {OrderId}, AuctionId {AuctionId}, SenderId {SenderId}, SenderRole {SenderRole}, AttachmentCount {AttachmentCount}, ContentLength {ContentLength}, ServerTimeUtc {ServerTimeUtc}, ServerTimeUtcMs {ServerTimeUtcMs}",
+            BusinessEvents.DisputeMessageAdded,
+            dispute.Id,
+            dispute.OrderId,
+            dispute.AuctionId,
+            userId,
+            senderRole,
+            message.Attachments.Count,
+            request.Content.Length,
+            messageCreatedAt,
+            AuditLog.ToUnixTimeMilliseconds(messageCreatedAt));
+
         return Ok(new DisputeMessageDto
         {
             Id = message.Id,
@@ -253,6 +294,18 @@ public class DisputeController : ControllerBase
         dispute.ReviewedAt = DateTime.UtcNow;
 
         await _disputeRepo.UpdateAsync(id, dispute);
+
+        _logger.LogInformation(
+            "{EventName}: Dispute moved to under review. DisputeId {DisputeId}, OrderId {OrderId}, AuctionId {AuctionId}, AdminId {AdminId}, PreviousStatus {PreviousStatus}, NewStatus {NewStatus}, ReviewedAtUtc {ReviewedAtUtc}, ReviewedAtUtcMs {ReviewedAtUtcMs}",
+            BusinessEvents.DisputeUnderReview,
+            dispute.Id,
+            dispute.OrderId,
+            dispute.AuctionId,
+            adminId,
+            DisputeStatus.Open,
+            dispute.Status,
+            dispute.ReviewedAt,
+            dispute.ReviewedAt.HasValue ? AuditLog.ToUnixTimeMilliseconds(dispute.ReviewedAt.Value) : null);
 
         // Notify both parties
         var admin = await _userRepo.GetByIdAsync(adminId);
@@ -299,25 +352,44 @@ public class DisputeController : ControllerBase
         await _disputeRepo.UpdateAsync(id, dispute);
 
         // ═══ XỬ LÝ ESCROW DỰA TRÊN KẾT QUẢ PHÁN QUYẾT ═══
+        var escrowAction = "None";
+        bool? escrowActionSucceeded = null;
         if (request.Resolution == DisputeStatus.ResolvedBuyerWins)
         {
             // Buyer thắng → Hoàn tiền Escrow về Buyer
+            escrowAction = "RefundEscrowToBuyer";
             var refundSuccess = await _escrowService.RefundEscrowToBuyerAsync(
                 dispute.OrderId, "AdminDecision_BuyerWins");
+            escrowActionSucceeded = refundSuccess;
             if (!refundSuccess)
             {
-                // Log lỗi nhưng không fail request (dispute đã được resolve)
-                // Admin sẽ cần xử lý thủ công nếu Escrow đã bị release trước đó
+                _logger.LogWarning(
+                    "{EventName}: Escrow action requires manual follow-up. DisputeId {DisputeId}, OrderId {OrderId}, Resolution {Resolution}, EscrowAction {EscrowAction}, AdminId {AdminId}",
+                    BusinessEvents.DisputeEscrowActionFailed,
+                    dispute.Id,
+                    dispute.OrderId,
+                    request.Resolution,
+                    escrowAction,
+                    adminId);
             }
         }
         else if (request.Resolution == DisputeStatus.ResolvedSellerWins)
         {
             // Seller thắng → Giải phóng Escrow sang Seller
+            escrowAction = "ReleaseEscrowToSeller";
             var releaseSuccess = await _escrowService.ReleaseEscrowToSellerAsync(
                 dispute.OrderId, "AdminDecision_SellerWins");
+            escrowActionSucceeded = releaseSuccess;
             if (!releaseSuccess)
             {
-                // Log lỗi nhưng không fail request
+                _logger.LogWarning(
+                    "{EventName}: Escrow action requires manual follow-up. DisputeId {DisputeId}, OrderId {OrderId}, Resolution {Resolution}, EscrowAction {EscrowAction}, AdminId {AdminId}",
+                    BusinessEvents.DisputeEscrowActionFailed,
+                    dispute.Id,
+                    dispute.OrderId,
+                    request.Resolution,
+                    escrowAction,
+                    adminId);
             }
         }
 
@@ -354,8 +426,31 @@ public class DisputeController : ControllerBase
                     u.Email, u.FullName, dispute.ProductTitle ?? "",
                     statusText, request.AdminNote);
             }
-            catch { /* Don't fail on email error */ }
+            catch (Exception ex)
+            {
+                _logger.LogError(
+                    ex,
+                    "{EventName}: Failed to send dispute resolved email. DisputeId {DisputeId}, RecipientUserId {RecipientUserId}, RecipientEmail {RecipientEmail}",
+                    BusinessEvents.DisputeNotificationFailed,
+                    dispute.Id,
+                    u.Id,
+                    u.Email);
+            }
         }
+
+        _logger.LogInformation(
+            "{EventName}: Dispute resolved. DisputeId {DisputeId}, OrderId {OrderId}, AuctionId {AuctionId}, Resolution {Resolution}, WinnerUserId {WinnerUserId}, AdminId {AdminId}, EscrowAction {EscrowAction}, EscrowActionSucceeded {EscrowActionSucceeded}, ResolvedAtUtc {ResolvedAtUtc}, ResolvedAtUtcMs {ResolvedAtUtcMs}",
+            BusinessEvents.DisputeResolved,
+            dispute.Id,
+            dispute.OrderId,
+            dispute.AuctionId,
+            request.Resolution,
+            request.Resolution == DisputeStatus.ResolvedBuyerWins ? dispute.BuyerId : dispute.SellerId,
+            adminId,
+            escrowAction,
+            escrowActionSucceeded,
+            dispute.ResolvedAt,
+            dispute.ResolvedAt.HasValue ? AuditLog.ToUnixTimeMilliseconds(dispute.ResolvedAt.Value) : null);
 
         return Ok(MapToDto(dispute));
     }
@@ -388,6 +483,17 @@ public class DisputeController : ControllerBase
         if (isAdmin) dispute.AdminId = userId;
 
         await _disputeRepo.UpdateAsync(id, dispute);
+
+        _logger.LogInformation(
+            "{EventName}: Dispute closed. DisputeId {DisputeId}, OrderId {OrderId}, AuctionId {AuctionId}, ClosedByUserId {ClosedByUserId}, ClosedByRole {ClosedByRole}, ClosedAtUtc {ClosedAtUtc}, ClosedAtUtcMs {ClosedAtUtcMs}",
+            BusinessEvents.DisputeClosed,
+            dispute.Id,
+            dispute.OrderId,
+            dispute.AuctionId,
+            userId,
+            isAdmin ? "Admin" : dispute.OpenedBy,
+            dispute.ClosedAt,
+            dispute.ClosedAt.HasValue ? AuditLog.ToUnixTimeMilliseconds(dispute.ClosedAt.Value) : null);
 
         // Notify the other party
         var otherUserId = userId == dispute.BuyerId ? dispute.SellerId : dispute.BuyerId;

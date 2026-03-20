@@ -11,6 +11,7 @@ using MongoDB.Driver;
 using Microsoft.AspNetCore.Authentication.Google;
 using Microsoft.AspNetCore.SignalR;
 using RealtimeAuction.Api.Hubs;
+using RealtimeAuction.Api.Observability;
 using System.Text.Json;
 using FluentValidation;
 using FluentValidation.AspNetCore;
@@ -91,6 +92,7 @@ if (string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("MAIL_HOST")) &
 }
 
 var builder = WebApplication.CreateBuilder(args);
+builder.AddProductionObservability();
 
 // Cho phép upload file tới 50MB (Kestrel mặc định 28MB)
 builder.WebHost.ConfigureKestrel(serverOptions =>
@@ -586,6 +588,7 @@ using (var scope = app.Services.CreateScope())
 
 // Global exception handler — must be first in pipeline to catch all errors
 app.UseMiddleware<RealtimeAuction.Api.Middleware.GlobalExceptionMiddleware>();
+app.UseProductionObservability();
 
 if (app.Environment.IsDevelopment())
 {

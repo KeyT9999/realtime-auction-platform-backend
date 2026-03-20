@@ -3,6 +3,7 @@ using MongoDB.Driver;
 using RealtimeAuction.Api.Dtos.Bid;
 using RealtimeAuction.Api.Models;
 using RealtimeAuction.Api.Models.Enums;
+using RealtimeAuction.Api.Observability;
 using RealtimeAuction.Api.Repositories;
 
 namespace RealtimeAuction.Api.Services;
@@ -76,6 +77,16 @@ public class BidService : IBidService
 
     private async Task<BidResult> PlaceBidCoreAsync(string userId, CreateBidDto request)
     {
+        var receivedAt = DateTime.UtcNow;
+        _logger.LogInformation(
+            "{EventName}: Bid request received. UserId {UserId}, AuctionId {AuctionId}, Amount {Amount}, ServerTimeUtc {ServerTimeUtc}, ServerTimeUtcMs {ServerTimeUtcMs}",
+            BusinessEvents.BidReceived,
+            userId,
+            request.AuctionId,
+            request.Amount,
+            receivedAt,
+            AuditLog.ToUnixTimeMilliseconds(receivedAt));
+
         var userTask = _userRepository.GetByIdAsync(userId);
         var auctionTask = _auctionRepository.GetByIdAsync(request.AuctionId);
         await Task.WhenAll(userTask, auctionTask);
@@ -85,28 +96,28 @@ public class BidService : IBidService
 
         if (user == null)
         {
-            return new BidResult { Success = false, ErrorMessage = "Nguoi dung khong ton tai" };
+            return RejectBid("UserNotFound", "Nguoi dung khong ton tai", userId, request, null);
         }
 
         if (auction == null)
         {
-            return new BidResult { Success = false, ErrorMessage = "Phien dau gia khong ton tai" };
+            return RejectBid("AuctionNotFound", "Phien dau gia khong ton tai", userId, request, null);
         }
 
         if (auction.Status != AuctionStatus.Active)
         {
-            return new BidResult { Success = false, ErrorMessage = "Phien dau gia khong con hoat dong" };
+            return RejectBid("AuctionNotActive", "Phien dau gia khong con hoat dong", userId, request, auction);
         }
 
         if (auction.SellerId == userId)
         {
-            return new BidResult { Success = false, ErrorMessage = "Ban khong the dau gia san pham cua chinh minh" };
+            return RejectBid("SellerCannotBidOwnAuction", "Ban khong the dau gia san pham cua chinh minh", userId, request, auction);
         }
 
         var minBid = auction.CurrentPrice + auction.BidIncrement;
         if (request.Amount < minBid)
         {
-            return new BidResult { Success = false, ErrorMessage = $"Gia dat toi thieu phai la {minBid:N0}d" };
+            return RejectBid("BidBelowMinimum", $"Gia dat toi thieu phai la {minBid:N0}d", userId, request, auction, minBid: minBid);
         }
 
         var auctionBids = await _bidRepository.GetByAuctionIdAsync(request.AuctionId);
@@ -121,16 +132,20 @@ public class BidService : IBidService
 
         if (holdAmount < 0)
         {
-            return new BidResult { Success = false, ErrorMessage = "So tien hold khong hop le" };
+            return RejectBid("InvalidHoldAmount", "So tien hold khong hop le", userId, request, auction, minBid: minBid, holdAmount: holdAmount);
         }
 
         if (user.AvailableBalance < holdAmount)
         {
-            return new BidResult
-            {
-                Success = false,
-                ErrorMessage = $"So du khong du. Can {holdAmount:N0}d, hien co {user.AvailableBalance:N0}d"
-            };
+            return RejectBid(
+                "InsufficientBalance",
+                $"So du khong du. Can {holdAmount:N0}d, hien co {user.AvailableBalance:N0}d",
+                userId,
+                request,
+                auction,
+                minBid: minBid,
+                holdAmount: holdAmount,
+                availableBalance: user.AvailableBalance);
         }
 
         var previousHighestBid = auctionBids
@@ -162,7 +177,13 @@ public class BidService : IBidService
         }
         catch (Exception ex) when (IsTransactionSupportException(ex))
         {
-            _logger.LogWarning(ex, "MongoDB transactions are not supported. Falling back to sequential bid processing.");
+            _logger.LogWarning(
+                ex,
+                "{EventName}: MongoDB transactions are not supported. Falling back to sequential bid processing. UserId {UserId}, AuctionId {AuctionId}, Amount {Amount}",
+                BusinessEvents.BidProcessingFallback,
+                userId,
+                request.AuctionId,
+                request.Amount);
             return await PlaceBidWithoutTransactionAsync(userId, request, context);
         }
     }
@@ -261,8 +282,21 @@ public class BidService : IBidService
             await session.CommitTransactionAsync();
 
             _logger.LogInformation(
-                "Bid placed transactionally: User {UserId} bid {Amount} on auction {AuctionId}. Held {HeldAmount}",
-                userId, request.Amount, request.AuctionId, context.HoldAmount);
+                "{EventName}: Bid accepted. ProcessingMode {ProcessingMode}, UserId {UserId}, AuctionId {AuctionId}, BidId {BidId}, Amount {Amount}, HeldAmount {HeldAmount}, PreviousCurrentPrice {PreviousCurrentPrice}, NewCurrentPrice {NewCurrentPrice}, OutbidUserId {OutbidUserId}, AuctionEndTimeUtc {AuctionEndTimeUtc}, AuctionEndTimeUtcMs {AuctionEndTimeUtcMs}, ServerTimeUtc {ServerTimeUtc}, ServerTimeUtcMs {ServerTimeUtcMs}",
+                BusinessEvents.BidAccepted,
+                "Transactional",
+                userId,
+                request.AuctionId,
+                createdBid.Id,
+                request.Amount,
+                context.HoldAmount,
+                context.Auction.CurrentPrice,
+                request.Amount,
+                context.OutbidUserId,
+                context.Auction.EndTime,
+                AuditLog.ToUnixTimeMilliseconds(context.Auction.EndTime),
+                now,
+                AuditLog.ToUnixTimeMilliseconds(now));
 
             return new BidResult
             {
@@ -271,9 +305,17 @@ public class BidService : IBidService
                 OutbidUserId = context.OutbidUserId
             };
         }
-        catch
+        catch (Exception ex)
         {
             await session.AbortTransactionAsync();
+            _logger.LogError(
+                ex,
+                "{EventName}: Bid processing failed before transaction commit. ProcessingMode {ProcessingMode}, UserId {UserId}, AuctionId {AuctionId}, Amount {Amount}",
+                BusinessEvents.BidProcessingFailed,
+                "Transactional",
+                userId,
+                request.AuctionId,
+                request.Amount);
             throw;
         }
     }
@@ -315,14 +357,63 @@ public class BidService : IBidService
         }
 
         _logger.LogInformation(
-            "Bid placed sequentially: User {UserId} bid {Amount} on auction {AuctionId}. Held {HeldAmount}",
-            userId, request.Amount, request.AuctionId, context.HoldAmount);
+            "{EventName}: Bid accepted. ProcessingMode {ProcessingMode}, UserId {UserId}, AuctionId {AuctionId}, BidId {BidId}, Amount {Amount}, HeldAmount {HeldAmount}, PreviousCurrentPrice {PreviousCurrentPrice}, NewCurrentPrice {NewCurrentPrice}, OutbidUserId {OutbidUserId}, AuctionEndTimeUtc {AuctionEndTimeUtc}, AuctionEndTimeUtcMs {AuctionEndTimeUtcMs}, ServerTimeUtc {ServerTimeUtc}, ServerTimeUtcMs {ServerTimeUtcMs}",
+            BusinessEvents.BidAccepted,
+            "Sequential",
+            userId,
+            request.AuctionId,
+            createdBid.Id,
+            request.Amount,
+            context.HoldAmount,
+            context.Auction.CurrentPrice,
+            request.Amount,
+            context.OutbidUserId,
+            context.Auction.EndTime,
+            AuditLog.ToUnixTimeMilliseconds(context.Auction.EndTime),
+            DateTime.UtcNow,
+            AuditLog.ToUnixTimeMilliseconds(DateTime.UtcNow));
 
         return new BidResult
         {
             Success = true,
             Bid = createdBid,
             OutbidUserId = context.OutbidUserId
+        };
+    }
+
+    private BidResult RejectBid(
+        string reason,
+        string errorMessage,
+        string userId,
+        CreateBidDto request,
+        Auction? auction,
+        decimal? minBid = null,
+        decimal? holdAmount = null,
+        decimal? availableBalance = null)
+    {
+        var now = DateTime.UtcNow;
+        _logger.LogWarning(
+            "{EventName}: Bid rejected. Reason {Reason}, UserId {UserId}, AuctionId {AuctionId}, Amount {Amount}, AuctionStatus {AuctionStatus}, CurrentPrice {CurrentPrice}, BidIncrement {BidIncrement}, MinBid {MinBid}, HoldAmount {HoldAmount}, AvailableBalance {AvailableBalance}, AuctionEndTimeUtc {AuctionEndTimeUtc}, AuctionEndTimeUtcMs {AuctionEndTimeUtcMs}, ServerTimeUtc {ServerTimeUtc}, ServerTimeUtcMs {ServerTimeUtcMs}",
+            BusinessEvents.BidRejected,
+            reason,
+            userId,
+            request.AuctionId,
+            request.Amount,
+            auction?.Status,
+            auction?.CurrentPrice,
+            auction?.BidIncrement,
+            minBid,
+            holdAmount,
+            availableBalance,
+            auction?.EndTime,
+            auction != null ? AuditLog.ToUnixTimeMilliseconds(auction.EndTime) : null,
+            now,
+            AuditLog.ToUnixTimeMilliseconds(now));
+
+        return new BidResult
+        {
+            Success = false,
+            ErrorMessage = errorMessage
         };
     }
 
