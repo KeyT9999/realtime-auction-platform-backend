@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.SignalR;
 using RealtimeAuction.Api.Hubs;
 using RealtimeAuction.Api.Models;
 using RealtimeAuction.Api.Models.Enums;
+using RealtimeAuction.Api.Observability;
 using RealtimeAuction.Api.Repositories;
 using RealtimeAuction.Api.Services;
 
@@ -71,8 +72,7 @@ public class AuctionEndBackgroundService : BackgroundService
             try
             {
                 await ProcessAuctionEndAsync(
-                    auction.Id!, 
-                    auction.SellerId,
+                    auction,
                     auctionRepository, 
                     bidRepository, 
                     bidService,
@@ -86,8 +86,7 @@ public class AuctionEndBackgroundService : BackgroundService
     }
 
     private async Task ProcessAuctionEndAsync(
-        string auctionId,
-        string sellerId,
+        Auction auctionSnapshot,
         IAuctionRepository auctionRepository,
         IBidRepository bidRepository,
         IBidService bidService,
@@ -96,16 +95,27 @@ public class AuctionEndBackgroundService : BackgroundService
         using var scope = _serviceProvider.CreateScope();
         var transactionRepository = scope.ServiceProvider.GetRequiredService<ITransactionRepository>();
         var userRepository = scope.ServiceProvider.GetRequiredService<IUserRepository>();
-        
-        _logger.LogInformation("Processing auction end: {AuctionId}", auctionId);
+        var processedAt = DateTime.UtcNow;
+
+        _logger.LogInformation(
+            "{EventName}: Processing auction end. AuctionId {AuctionId}, SellerId {SellerId}, CurrentPrice {CurrentPrice}, BidCount {BidCount}, AuctionEndTimeUtc {AuctionEndTimeUtc}, AuctionEndTimeUtcMs {AuctionEndTimeUtcMs}, ServerTimeUtc {ServerTimeUtc}, ServerTimeUtcMs {ServerTimeUtcMs}",
+            BusinessEvents.AuctionEndProcessingStarted,
+            auctionSnapshot.Id,
+            auctionSnapshot.SellerId,
+            auctionSnapshot.CurrentPrice,
+            auctionSnapshot.BidCount,
+            auctionSnapshot.EndTime,
+            AuditLog.ToUnixTimeMilliseconds(auctionSnapshot.EndTime),
+            processedAt,
+            AuditLog.ToUnixTimeMilliseconds(processedAt));
 
         // 1. Lấy highest bid
-        var highestBid = await bidRepository.GetHighestBidAsync(auctionId);
+        var highestBid = await bidRepository.GetHighestBidAsync(auctionSnapshot.Id!);
         
         if (highestBid == null)
         {
             // Không có bid nào - auction không thành công
-            var auction = await auctionRepository.GetByIdAsync(auctionId);
+            var auction = await auctionRepository.GetByIdAsync(auctionSnapshot.Id!);
             if (auction != null)
             {
                 auction.Status = AuctionStatus.Failed;
@@ -113,20 +123,29 @@ public class AuctionEndBackgroundService : BackgroundService
                 await auctionRepository.UpdateAsync(auction);
 
                 // Notify seller
-                await AuctionHub.NotifyAuctionEnded(hubContext, auctionId, new
+                await AuctionHub.NotifyAuctionEnded(hubContext, auctionSnapshot.Id!, new
                 {
-                    AuctionId = auctionId,
+                    AuctionId = auctionSnapshot.Id,
                     Status = "Failed",
                     Message = "Phiên đấu giá không có người tham gia"
                 });
 
-                _logger.LogInformation("Auction {AuctionId} ended with no bids", auctionId);
+                var endedAt = DateTime.UtcNow;
+                _logger.LogInformation(
+                    "{EventName}: Auction ended without bids. AuctionId {AuctionId}, SellerId {SellerId}, AuctionEndTimeUtc {AuctionEndTimeUtc}, AuctionEndTimeUtcMs {AuctionEndTimeUtcMs}, ServerTimeUtc {ServerTimeUtc}, ServerTimeUtcMs {ServerTimeUtcMs}",
+                    BusinessEvents.AuctionClosedNoBids,
+                    auction.Id,
+                    auction.SellerId,
+                    auction.EndTime,
+                    AuditLog.ToUnixTimeMilliseconds(auction.EndTime),
+                    endedAt,
+                    AuditLog.ToUnixTimeMilliseconds(endedAt));
             }
             return;
         }
 
         // 2. Có winner - cập nhật auction status
-        var auctionToComplete = await auctionRepository.GetByIdAsync(auctionId);
+        var auctionToComplete = await auctionRepository.GetByIdAsync(auctionSnapshot.Id!);
         if (auctionToComplete != null)
         {
             auctionToComplete.Status = AuctionStatus.Completed;
@@ -141,7 +160,7 @@ public class AuctionEndBackgroundService : BackgroundService
         await bidRepository.UpdateAsync(highestBid);
 
         // 4. Release hold cho tất cả losers
-        await bidService.ReleaseAllHoldsExceptWinnerAsync(auctionId, highestBid.UserId);
+        await bidService.ReleaseAllHoldsExceptWinnerAsync(auctionSnapshot.Id!, highestBid.UserId);
 
         // 5. Tạo Transaction Pending (giữ hold của winner, chưa chuyển tiền)
         var winner = await userRepository.GetByIdAsync(highestBid.UserId);
@@ -153,7 +172,7 @@ public class AuctionEndBackgroundService : BackgroundService
                 Type = TransactionType.Payment,
                 Amount = -highestBid.HeldAmount,
                 Description = $"Thanh toán đấu giá - chờ xác nhận",
-                RelatedAuctionId = auctionId,
+                RelatedAuctionId = auctionSnapshot.Id,
                 RelatedBidId = highestBid.Id,
                 Status = TransactionStatus.Pending,
                 BuyerConfirmed = false,
@@ -169,18 +188,18 @@ public class AuctionEndBackgroundService : BackgroundService
         var orderService = scope.ServiceProvider.GetRequiredService<IOrderService>();
         var productImage = auctionToComplete?.Images?.FirstOrDefault();
         await orderService.CreateOrderFromAuctionAsync(
-            auctionId,
+            auctionSnapshot.Id!,
             highestBid.UserId,
-            sellerId,
+            auctionSnapshot.SellerId,
             highestBid.Amount,
             auctionToComplete?.Title ?? "Đấu giá",
             productImage
         );
 
         // 6. Notify winner và seller
-        await AuctionHub.NotifyAuctionEnded(hubContext, auctionId, new
+        await AuctionHub.NotifyAuctionEnded(hubContext, auctionSnapshot.Id!, new
         {
-            AuctionId = auctionId,
+            AuctionId = auctionSnapshot.Id,
             Status = "Completed",
             WinnerId = highestBid.UserId,
             FinalPrice = highestBid.Amount,
@@ -189,7 +208,7 @@ public class AuctionEndBackgroundService : BackgroundService
 
         await AuctionHub.NotifyUserWon(hubContext, highestBid.UserId, new
         {
-            AuctionId = auctionId,
+            AuctionId = auctionSnapshot.Id,
             AuctionTitle = auctionToComplete?.Title,
             WinningBid = highestBid.Amount,
             Message = "Chúc mừng! Bạn đã thắng đấu giá"
@@ -202,7 +221,7 @@ public class AuctionEndBackgroundService : BackgroundService
             {
                 var emailService = scope.ServiceProvider.GetRequiredService<IEmailService>();
                 var configuration = scope.ServiceProvider.GetRequiredService<IConfiguration>();
-                var transactionUrl = $"{configuration["FrontendUrl"]}/auctions/{auctionId}";
+                var transactionUrl = $"{configuration["FrontendUrl"]}/auctions/{auctionSnapshot.Id}";
                 var winningBidStr = FormatCurrency(highestBid.Amount);
                 
                 await emailService.SendAuctionWonEmailAsync(
@@ -221,8 +240,18 @@ public class AuctionEndBackgroundService : BackgroundService
         }
 
         _logger.LogInformation(
-            "Auction {AuctionId} completed. Winner: {WinnerId}, Price: {Price}",
-            auctionId, highestBid.UserId, highestBid.Amount);
+            "{EventName}: Auction completed with winner selected. AuctionId {AuctionId}, SellerId {SellerId}, WinnerId {WinnerId}, WinningBidId {WinningBidId}, FinalPrice {FinalPrice}, HeldAmount {HeldAmount}, AuctionEndTimeUtc {AuctionEndTimeUtc}, AuctionEndTimeUtcMs {AuctionEndTimeUtcMs}, ServerTimeUtc {ServerTimeUtc}, ServerTimeUtcMs {ServerTimeUtcMs}",
+            BusinessEvents.AuctionClosedWinnerSelected,
+            auctionSnapshot.Id,
+            auctionSnapshot.SellerId,
+            highestBid.UserId,
+            highestBid.Id,
+            highestBid.Amount,
+            highestBid.HeldAmount,
+            auctionSnapshot.EndTime,
+            AuditLog.ToUnixTimeMilliseconds(auctionSnapshot.EndTime),
+            DateTime.UtcNow,
+            AuditLog.ToUnixTimeMilliseconds(DateTime.UtcNow));
     }
 
     private static string FormatCurrency(decimal amount)
