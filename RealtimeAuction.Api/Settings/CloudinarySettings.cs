@@ -1,3 +1,4 @@
+// Mục đích tệp: Trien khai logic/chuc nang chinh cua file CloudinarySettings.
 namespace RealtimeAuction.Api.Settings;
 
 public class CloudinarySettings

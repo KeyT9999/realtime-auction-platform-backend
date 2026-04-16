@@ -1,3 +1,4 @@
+// Mục đích tệp: Chua logic nghiep vu chinh cho phan AuctionEndBackgroundService.
 using Microsoft.AspNetCore.SignalR;
 using RealtimeAuction.Api.Hubs;
 using RealtimeAuction.Api.Models;

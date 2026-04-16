@@ -1,3 +1,4 @@
+// Mục đích tệp: Dinh nghia du lieu trao doi (DTO) cho CreateAuctionDtoValidator.
 using FluentValidation;
 using RealtimeAuction.Api.Dtos.Auction;
 

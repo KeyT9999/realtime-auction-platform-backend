@@ -1,3 +1,4 @@
+// Mục đích tệp: Chua logic nghiep vu chinh cho phan ImageUploadService.
 using CloudinaryDotNet;
 using CloudinaryDotNet.Actions;
 using RealtimeAuction.Api.Settings;

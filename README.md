@@ -1,3 +1,4 @@
+<!-- Mục đích tệp: Tai lieu mo ta muc tieu, cach chay va thong tin su dung du an. -->
 # Realtime Auction Platform - Backend
 
 Backend API cho ứng dụng đấu giá realtime được xây dựng bằng .NET 8 Web API, MongoDB và SignalR.

@@ -1,3 +1,4 @@
+// Mục đích tệp: Chua logic nghiep vu chinh cho phan BidService.
 using System.Collections.Concurrent;
 using MongoDB.Driver;
 using RealtimeAuction.Api.Dtos.Bid;

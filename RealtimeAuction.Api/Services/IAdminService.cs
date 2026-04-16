@@ -1,3 +1,4 @@
+// Mục đích tệp: Chua logic nghiep vu chinh cho phan IAdminService.
 using RealtimeAuction.Api.Dtos.Admin;
 
 namespace RealtimeAuction.Api.Services;

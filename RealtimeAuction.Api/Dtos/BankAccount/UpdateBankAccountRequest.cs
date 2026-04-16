@@ -1,3 +1,4 @@
+// Mục đích tệp: Dinh nghia du lieu trao doi (DTO) cho UpdateBankAccountRequest.
 namespace RealtimeAuction.Api.Dtos.BankAccount;
 
 public class UpdateBankAccountRequest

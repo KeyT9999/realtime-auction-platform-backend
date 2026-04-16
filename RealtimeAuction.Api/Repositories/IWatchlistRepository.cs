@@ -1,3 +1,4 @@
+// Mục đích tệp: Truy cap va thao tac du lieu cho phan IWatchlistRepository.
 using RealtimeAuction.Api.Models;
 
 namespace RealtimeAuction.Api.Repositories;

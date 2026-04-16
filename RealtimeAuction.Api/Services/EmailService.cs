@@ -1,3 +1,4 @@
+// Mục đích tệp: Chua logic nghiep vu chinh cho phan EmailService.
 using Microsoft.Extensions.Options;
 using RealtimeAuction.Api.Settings;
 using SendGrid;

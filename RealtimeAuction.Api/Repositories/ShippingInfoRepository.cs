@@ -1,3 +1,4 @@
+// Mục đích tệp: Truy cap va thao tac du lieu cho phan ShippingInfoRepository.
 using MongoDB.Driver;
 using RealtimeAuction.Api.Models;
 

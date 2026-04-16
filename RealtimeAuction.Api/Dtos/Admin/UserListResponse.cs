@@ -1,3 +1,4 @@
+// Mục đích tệp: Dinh nghia du lieu trao doi (DTO) cho UserListResponse.
 namespace RealtimeAuction.Api.Dtos.Admin;
 
 public class UserListResponse

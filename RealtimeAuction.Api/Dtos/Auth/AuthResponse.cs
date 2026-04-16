@@ -1,3 +1,4 @@
+// Mục đích tệp: Dinh nghia du lieu trao doi (DTO) cho AuthResponse.
 namespace RealtimeAuction.Api.Dtos.Auth
 {
     public class AuthResponse

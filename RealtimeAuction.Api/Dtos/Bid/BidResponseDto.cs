@@ -1,3 +1,4 @@
+// Mục đích tệp: Dinh nghia du lieu trao doi (DTO) cho BidResponseDto.
 namespace RealtimeAuction.Api.Dtos.Bid;
 
 public class BidResponseDto

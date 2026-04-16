@@ -1,3 +1,4 @@
+// Mục đích tệp: Dinh nghia du lieu trao doi (DTO) cho SellerStatsResponse.
 namespace RealtimeAuction.Api.Dtos.User;
 
 public class SellerStatsResponse

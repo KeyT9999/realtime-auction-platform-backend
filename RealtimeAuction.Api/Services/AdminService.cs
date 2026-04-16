@@ -1,3 +1,4 @@
+// Mục đích tệp: Chua logic nghiep vu chinh cho phan AdminService.
 using MongoDB.Driver;
 using RealtimeAuction.Api.Dtos.Admin;
 using RealtimeAuction.Api.Helpers;

@@ -1,3 +1,4 @@
+// Mục đích tệp: Chua logic nghiep vu chinh cho phan ProvinceService.
 namespace RealtimeAuction.Api.Services;
 
 public class ProvinceService : IProvinceService

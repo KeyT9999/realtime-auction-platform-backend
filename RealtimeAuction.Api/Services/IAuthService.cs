@@ -1,3 +1,4 @@
+// Mục đích tệp: Chua logic nghiep vu chinh cho phan IAuthService.
 using RealtimeAuction.Api.Dtos.Auth;
 using RealtimeAuction.Api.Models;
 using RealtimeAuction.Api.Models.Enums;

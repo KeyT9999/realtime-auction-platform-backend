@@ -1,3 +1,4 @@
+// Mục đích tệp: Xu ly request API va dieu phoi luong nghiep vu lien quan den ChatController.
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;

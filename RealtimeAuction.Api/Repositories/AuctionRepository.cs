@@ -1,3 +1,4 @@
+// Mục đích tệp: Truy cap va thao tac du lieu cho phan AuctionRepository.
 using MongoDB.Driver;
 using RealtimeAuction.Api.Helpers;
 using RealtimeAuction.Api.Models;

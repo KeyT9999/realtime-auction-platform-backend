@@ -1,3 +1,4 @@
+// Mục đích tệp: Chua logic nghiep vu chinh cho phan IOrderService.
 using RealtimeAuction.Api.Dtos.Order;
 using RealtimeAuction.Api.Models;
 

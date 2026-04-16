@@ -1,3 +1,4 @@
+// Mục đích tệp: Chua logic nghiep vu chinh cho phan AuthService.
 using Google.Apis.Auth;
 using Microsoft.Extensions.Options;
 using MongoDB.Driver;

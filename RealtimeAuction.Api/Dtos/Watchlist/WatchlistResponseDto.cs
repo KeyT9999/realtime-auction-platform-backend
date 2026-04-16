@@ -1,3 +1,4 @@
+// Mục đích tệp: Dinh nghia du lieu trao doi (DTO) cho WatchlistResponseDto.
 namespace RealtimeAuction.Api.Dtos.Watchlist;
 
 public class WatchlistResponseDto

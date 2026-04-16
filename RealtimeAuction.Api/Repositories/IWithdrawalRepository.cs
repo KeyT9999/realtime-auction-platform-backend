@@ -1,3 +1,4 @@
+// Mục đích tệp: Truy cap va thao tac du lieu cho phan IWithdrawalRepository.
 using RealtimeAuction.Api.Models;
 using RealtimeAuction.Api.Models.Enums;
 

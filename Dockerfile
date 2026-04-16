@@ -1,3 +1,4 @@
+# Mục đích tệp: Dinh nghia cac buoc build va chay ung dung trong container Docker.
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS base
 WORKDIR /app
 EXPOSE 8080

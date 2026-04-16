@@ -1,3 +1,4 @@
+<!-- Mục đích tệp: Mo ta tac dung chinh cua file RealtimeAuction.Api trong he thong. -->
 <Project Sdk="Microsoft.NET.Sdk.Web">
 
   <PropertyGroup>

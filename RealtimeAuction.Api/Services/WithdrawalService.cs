@@ -1,3 +1,4 @@
+// Mục đích tệp: Chua logic nghiep vu chinh cho phan WithdrawalService.
 using System.Security.Cryptography;
 using System.Text;
 using BCrypt.Net;

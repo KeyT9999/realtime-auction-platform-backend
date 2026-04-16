@@ -1,3 +1,4 @@
+// Mục đích tệp: Xu ly request API va dieu phoi luong nghiep vu lien quan den AuthController.
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;

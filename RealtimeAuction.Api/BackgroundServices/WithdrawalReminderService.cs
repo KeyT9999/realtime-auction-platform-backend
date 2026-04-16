@@ -1,3 +1,4 @@
+// Mục đích tệp: Chua logic nghiep vu chinh cho phan WithdrawalReminderService.
 using RealtimeAuction.Api.Models;
 using RealtimeAuction.Api.Models.Enums;
 using RealtimeAuction.Api.Repositories;
