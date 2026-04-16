@@ -1,3 +1,4 @@
+// Mục đích tệp: Dinh nghia du lieu trao doi (DTO) cho PayOsWebhookPayload.
 using System.Text.Json.Serialization;
 
 namespace RealtimeAuction.Api.Dtos.Payment;

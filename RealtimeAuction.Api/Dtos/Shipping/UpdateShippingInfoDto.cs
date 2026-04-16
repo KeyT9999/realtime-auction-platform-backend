@@ -1,3 +1,4 @@
+// Mục đích tệp: Dinh nghia du lieu trao doi (DTO) cho UpdateShippingInfoDto.
 using System.ComponentModel.DataAnnotations;
 using RealtimeAuction.Api.Models.Enums;
 

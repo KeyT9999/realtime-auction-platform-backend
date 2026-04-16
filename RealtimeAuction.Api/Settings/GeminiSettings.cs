@@ -1,3 +1,4 @@
+// Mục đích tệp: Trien khai logic/chuc nang chinh cua file GeminiSettings.
 namespace RealtimeAuction.Api.Settings;
 
 public class GeminiSettings

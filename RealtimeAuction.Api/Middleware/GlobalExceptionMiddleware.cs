@@ -1,3 +1,5 @@
+
+// Mục đích tệp: Định nghĩa middleware xử lý request/response cho phần GlobalExceptionMiddleware.
 using System.Net;
 using System.Security.Authentication;
 using System.Text.Json;

@@ -1,3 +1,4 @@
+// Mục đích tệp: Chua logic nghiep vu chinh cho phan IGeminiService.
 using Microsoft.AspNetCore.Http;
 
 namespace RealtimeAuction.Api.Services;

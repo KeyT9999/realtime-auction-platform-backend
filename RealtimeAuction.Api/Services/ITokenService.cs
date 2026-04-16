@@ -1,3 +1,4 @@
+// Mục đích tệp: Chua logic nghiep vu chinh cho phan ITokenService.
 using RealtimeAuction.Api.Models;
 
 namespace RealtimeAuction.Api.Services

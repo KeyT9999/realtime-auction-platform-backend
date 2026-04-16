@@ -1,3 +1,4 @@
+// Mục đích tệp: Dinh nghia du lieu trao doi (DTO) cho ProductResponseDto.
 using RealtimeAuction.Api.Models.Enums;
 
 namespace RealtimeAuction.Api.Dtos.Product;

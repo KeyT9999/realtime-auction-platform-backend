@@ -1,3 +1,4 @@
+// Mục đích tệp: Chua logic nghiep vu chinh cho phan GeminiService.
 using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;

@@ -1,3 +1,4 @@
+// Mục đích tệp: Chua logic nghiep vu chinh cho phan IWithdrawalService.
 using RealtimeAuction.Api.Dtos.Withdrawal;
 using RealtimeAuction.Api.Models;
 

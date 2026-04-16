@@ -1,3 +1,4 @@
+// Mục đích tệp: Chua logic nghiep vu chinh cho phan IReviewService.
 using RealtimeAuction.Api.Dtos.Review;
 using RealtimeAuction.Api.Models;
 

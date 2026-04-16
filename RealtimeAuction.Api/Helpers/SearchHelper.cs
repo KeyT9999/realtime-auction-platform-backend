@@ -1,3 +1,4 @@
+// Mục đích tệp: Trien khai logic/chuc nang chinh cua file SearchHelper.
 using System.Collections.Generic;
 
 namespace RealtimeAuction.Api.Helpers;

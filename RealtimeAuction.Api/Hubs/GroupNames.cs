@@ -1,3 +1,4 @@
+// Mục đích tệp: Trien khai logic/chuc nang chinh cua file GroupNames.
 namespace RealtimeAuction.Api.Hubs;
 
 public static class GroupNames

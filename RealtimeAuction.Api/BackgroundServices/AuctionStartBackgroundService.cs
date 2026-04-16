@@ -1,3 +1,4 @@
+// Mục đích tệp: Chua logic nghiep vu chinh cho phan AuctionStartBackgroundService.
 using Microsoft.AspNetCore.SignalR;
 using MongoDB.Driver;
 using RealtimeAuction.Api.Hubs;

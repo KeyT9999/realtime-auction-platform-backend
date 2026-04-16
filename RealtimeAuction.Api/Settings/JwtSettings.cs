@@ -1,3 +1,4 @@
+// Mục đích tệp: Trien khai logic/chuc nang chinh cua file JwtSettings.
 namespace RealtimeAuction.Api.Settings
 {
     public class JwtSettings

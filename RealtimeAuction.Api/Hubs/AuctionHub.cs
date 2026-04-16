@@ -1,3 +1,4 @@
+// Mục đích tệp: Trien khai logic/chuc nang chinh cua file AuctionHub.
 using System.Security.Claims;
 using Microsoft.AspNetCore.SignalR;
 using System.Collections.Concurrent;

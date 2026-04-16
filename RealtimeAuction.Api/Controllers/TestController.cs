@@ -1,3 +1,4 @@
+// Mục đích tệp: Xu ly request API va dieu phoi luong nghiep vu lien quan den TestController.
 using Microsoft.AspNetCore.Mvc;
 
 namespace RealtimeAuction.Api.Controllers;

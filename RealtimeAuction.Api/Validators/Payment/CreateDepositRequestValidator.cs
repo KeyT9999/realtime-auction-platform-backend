@@ -1,3 +1,4 @@
+// Mục đích tệp: Trien khai logic/chuc nang chinh cua file CreateDepositRequestValidator.
 using FluentValidation;
 using RealtimeAuction.Api.Dtos.Payment;
 

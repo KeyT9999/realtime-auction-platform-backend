@@ -1,3 +1,4 @@
+// Mục đích tệp: Dinh nghia cau truc du lieu hoac thuc the cho Notification.
 using MongoDB.Bson;
 using MongoDB.Bson.Serialization.Attributes;
 

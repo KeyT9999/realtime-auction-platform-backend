@@ -1,3 +1,4 @@
+// Mục đích tệp: Truy cap va thao tac du lieu cho phan BidRepository.
 using MongoDB.Driver;
 using RealtimeAuction.Api.Models;
 

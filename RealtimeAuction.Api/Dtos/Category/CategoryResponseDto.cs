@@ -1,3 +1,4 @@
+// Mục đích tệp: Dinh nghia du lieu trao doi (DTO) cho CategoryResponseDto.
 namespace RealtimeAuction.Api.Dtos.Category;
 
 public class CategoryResponseDto

@@ -1,3 +1,4 @@
+// Mục đích tệp: Dinh nghia du lieu trao doi (DTO) cho UserBidDto.
 namespace RealtimeAuction.Api.Dtos.Admin;
 
 public class UserBidDto

@@ -1,3 +1,4 @@
+// Mục đích tệp: Chua logic nghiep vu chinh cho phan IPaymentService.
 using RealtimeAuction.Api.Dtos.Payment;
 
 namespace RealtimeAuction.Api.Services;

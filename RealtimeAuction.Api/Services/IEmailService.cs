@@ -1,3 +1,4 @@
+// Mục đích tệp: Chua logic nghiep vu chinh cho phan IEmailService.
 namespace RealtimeAuction.Api.Services;
 
 public interface IEmailService

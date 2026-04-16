@@ -1,3 +1,4 @@
+// Mục đích tệp: Dinh nghia cau truc du lieu hoac thuc the cho ShippingFeeType.
 namespace RealtimeAuction.Api.Models.Enums;
 
 public enum ShippingFeeType

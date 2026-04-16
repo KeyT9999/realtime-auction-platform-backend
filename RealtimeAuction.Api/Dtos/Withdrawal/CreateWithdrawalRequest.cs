@@ -1,3 +1,4 @@
+// Mục đích tệp: Dinh nghia du lieu trao doi (DTO) cho CreateWithdrawalRequest.
 using System.ComponentModel.DataAnnotations;
 
 namespace RealtimeAuction.Api.Dtos.Withdrawal;

@@ -1,3 +1,4 @@
+// Mục đích tệp: Trien khai logic/chuc nang chinh cua file MongoRegexHelper.
 using System.Text.RegularExpressions;
 
 namespace RealtimeAuction.Api.Helpers;

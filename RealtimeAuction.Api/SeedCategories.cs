@@ -1,3 +1,4 @@
+// Mục đích tệp: Trien khai logic/chuc nang chinh cua file SeedCategories.
 using MongoDB.Driver;
 using RealtimeAuction.Api.Models;
 

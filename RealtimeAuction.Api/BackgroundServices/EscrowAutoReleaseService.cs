@@ -1,3 +1,4 @@
+// Mục đích tệp: Chua logic nghiep vu chinh cho phan EscrowAutoReleaseService.
 using Microsoft.Extensions.Hosting;
 using RealtimeAuction.Api.Services;
 

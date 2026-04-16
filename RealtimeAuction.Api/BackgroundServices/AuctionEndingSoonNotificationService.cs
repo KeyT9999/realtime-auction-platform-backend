@@ -1,3 +1,4 @@
+// Mục đích tệp: Chua logic nghiep vu chinh cho phan AuctionEndingSoonNotificationService.
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Options;
 using RealtimeAuction.Api.Hubs;

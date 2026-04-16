@@ -1,3 +1,4 @@
+// Mục đích tệp: Chua logic nghiep vu chinh cho phan IBidService.
 using RealtimeAuction.Api.Dtos.Bid;
 using RealtimeAuction.Api.Models;
 

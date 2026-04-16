@@ -1,3 +1,4 @@
+// Mục đích tệp: Chua logic nghiep vu chinh cho phan OrderService.
 using RealtimeAuction.Api.Dtos.Order;
 using RealtimeAuction.Api.Models;
 using RealtimeAuction.Api.Models.Enums;
